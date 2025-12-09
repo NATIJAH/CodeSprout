@@ -37,16 +37,6 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
     '6 Dedikasi',
     '6 Ikhlas',
     '6 Usaha',
-    'Form 1 Science',
-    'Form 1 Arts',
-    'Form 2 Science',
-    'Form 2 Arts',
-    'Form 3 Science',
-    'Form 3 Arts',
-    'Form 4 Science',
-    'Form 4 Arts',
-    'Form 5 Science',
-    'Form 5 Arts',
   ];
 
   @override
