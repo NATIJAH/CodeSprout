@@ -1,23 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
 
 // Screens
 import 'screens/chat_home_screen.dart';
 import 'screens/open_student_chat.dart';
 import 'screens/open_teacher_chat.dart';
-import 'screens/student_dashboard.dart';
-import 'screens/teacher_dashboard.dart';
 import 'screens/login_screen.dart';
+
+// Providers
+import 'providers/materials_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Supabase
   await Supabase.initialize(
-    url: 'https://fyvfocfbxrdaoyecbfzm.supabase.co', // Replace with your Supabase URL
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5dmZvY2ZieHJkYW95ZWNiZnptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4MzAxMzEsImV4cCI6MjA3OTQwNjEzMX0.R-Gtwp0Xmg9KUWGn6zV0G7xxYVX0QiWvTCfq3-MwpU4', // Replace with your Supabase anon key
+    url: 'https://fyvfocfbxrdaoyecbfzm.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5dmZvY2ZieHJkYW95ZWNiZnptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4MzAxMzEsImV4cCI6MjA3OTQwNjEzMX0.R-Gtwp0Xmg9KUWGn6zV0G7xxYVX0QiWvTCfq3-MwpU4',
   );
-  
+
   runApp(const MyApp());
 }
 
@@ -26,55 +28,59 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'School Communication App',
-      theme: ThemeData(
-        primarySwatch: Colors.green,
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF128C7E), // WhatsApp green
-          foregroundColor: Colors.white,
-          elevation: 1,
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: Color(0xFF128C7E),
-          foregroundColor: Colors.white,
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.grey[100],
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(25),
-            borderSide: BorderSide.none,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => MaterialsProvider()),
+      ],
+      child: MaterialApp(
+        title: 'CodeSprout',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          primaryColor: const Color(0xff4f7f67),
+          scaffoldBackgroundColor: const Color(0xffdfeee7),
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Color(0xff4f7f67),
+            foregroundColor: Colors.white,
+            elevation: 0,
           ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 12,
+          floatingActionButtonTheme: const FloatingActionButtonThemeData(
+            backgroundColor: Color(0xFF128C7E),
+            foregroundColor: Colors.white,
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: Colors.grey[100],
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(25),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
           ),
         ),
-      ),
-      debugShowCheckedModeBanner: false,
-      home: const AuthWrapper(),
-      // Update your routes in main.dart:
-routes: {
-  '/login': (context) => const LoginScreen(),
-  '/student-dashboard': (context) => StudentDashboard(
-        userId: Supabase.instance.client.auth.currentUser?.id ?? '',
-        onSignOut: () {
-          Supabase.instance.client.auth.signOut();
-          Navigator.pushReplacementNamed(context, '/login');
+        home: const AuthWrapper(),
+        routes: {
+          '/login': (context) => const LoginScreen(),
+          '/student-dashboard': (context) => StudentDashboard(
+                userId: Supabase.instance.client.auth.currentUser?.id ?? '',
+                onSignOut: () {
+                  Supabase.instance.client.auth.signOut();
+                  Navigator.pushReplacementNamed(context, '/login');
+                },
+              ),
+          '/teacher-dashboard': (context) => TeacherDashboard(
+                userId: Supabase.instance.client.auth.currentUser?.id ?? '',
+                onSignOut: () {
+                  Supabase.instance.client.auth.signOut();
+                  Navigator.pushReplacementNamed(context, '/login');
+                },
+              ),
+          '/student-chat': (context) => const OpenStudentChat(),
+          '/teacher-chat': (context) => const OpenTeacherChat(),
         },
       ),
-  '/teacher-dashboard': (context) => TeacherDashboard(
-        userId: Supabase.instance.client.auth.currentUser?.id ?? '',
-        onSignOut: () {
-          Supabase.instance.client.auth.signOut();
-          Navigator.pushReplacementNamed(context, '/login');
-        },
-      ),
-  '/student-chat': (context) => const OpenStudentChat(),
-  '/teacher-chat': (context) => const OpenTeacherChat(),
-},
     );
   }
 }
@@ -96,7 +102,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
   void initState() {
     super.initState();
     _checkAuth();
-    // Listen for auth state changes
     supabase.auth.onAuthStateChange.listen((AuthState data) {
       _checkAuth();
     });
@@ -106,9 +111,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
     try {
       final session = supabase.auth.currentSession;
       final user = supabase.auth.currentUser;
-      
+
       if (session != null && user != null) {
-        // Determine user type by checking which profile table has the user
         final studentProfile = await supabase
             .from('profile_student')
             .select('id')
@@ -123,8 +127,11 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
         setState(() {
           _user = user;
-          _userType = studentProfile != null ? 'student' : 
-                     teacherProfile != null ? 'teacher' : null;
+          _userType = studentProfile != null
+              ? 'student'
+              : teacherProfile != null
+                  ? 'teacher'
+                  : null;
           _isLoading = false;
         });
       } else {
@@ -158,9 +165,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -168,24 +173,17 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const LoginScreen();
     }
 
-    // Redirect based on user type
     return _userType == 'student'
-        ? StudentDashboard(
-            userId: _user!.id,
-            onSignOut: _signOut,
-          )
-        : TeacherDashboard(
-            userId: _user!.id,
-            onSignOut: _signOut,
-          );
+        ? StudentDashboard(userId: _user!.id, onSignOut: _signOut)
+        : TeacherDashboard(userId: _user!.id, onSignOut: _signOut);
   }
 }
 
-// Update StudentDashboard and TeacherDashboard to accept parameters
+// Inline StudentDashboard
 class StudentDashboard extends StatelessWidget {
   final String userId;
   final VoidCallback onSignOut;
-  
+
   const StudentDashboard({
     super.key,
     required this.userId,
@@ -239,10 +237,11 @@ class StudentDashboard extends StatelessWidget {
   }
 }
 
+// Inline TeacherDashboard
 class TeacherDashboard extends StatelessWidget {
   final String userId;
   final VoidCallback onSignOut;
-  
+
   const TeacherDashboard({
     super.key,
     required this.userId,
