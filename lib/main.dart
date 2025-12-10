@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/login_screen.dart';
 import 'screens/student_dashboard.dart';
 import 'screens/teacher_dashboard.dart';
+import 'providers/materials_provider.dart'; // Make sure this import exists
 
 const String TEACHER_INVITE_CODE = "SPROUT2025";
 
@@ -27,56 +29,86 @@ class SproutApp extends StatefulWidget {
 class _SproutAppState extends State<SproutApp> {
   final _supabase = Supabase.instance.client;
   late Stream<AuthState> _authStateStream;
+  bool _isLoading = true;
+  Session? _currentSession;
 
   @override
   void initState() {
     super.initState();
+    
+    // Get initial session immediately
+    _currentSession = _supabase.auth.currentSession;
+    _isLoading = false;
+    
+    // Set up auth state stream for real-time updates
     _authStateStream = _supabase.auth.onAuthStateChange;
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Sprout App',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF9ED2A1),
+    if (_isLoading) {
+      return MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 20),
+                Text('Loading...'),
+              ],
+            ),
+          ),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF4FDF5),
-        useMaterial3: true,
-      ),
-      debugShowCheckedModeBanner: false,
-      home: StreamBuilder<AuthState>(
-        stream: _authStateStream,
-        builder: (context, snapshot) {
-          // Loading state
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
+      );
+    }
 
-          final authState = snapshot.data;
-          final session = authState?.session;
-          final user = session?.user;
-
-          // User is logged in
-          if (user != null) {
-            // We need to check if user is teacher or student
-            // Since we can't do async here, we'll redirect to a loading screen
-            return const AuthLoadingScreen();
-          }
-
-          // User is not logged in
-          return const LoginScreen();
-        },
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => MaterialsProvider()),
+        // Add other providers here if you have them
+      ],
+      child: MaterialApp(
+        title: 'Sprout App',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF9ED2A1),
+          ),
+          scaffoldBackgroundColor: const Color(0xFFF4FDF5),
+          useMaterial3: true,
+        ),
+        debugShowCheckedModeBanner: false,
+        home: StreamBuilder<AuthState>(
+          stream: _authStateStream,
+          builder: (context, snapshot) {
+            // Use the stream for real-time auth changes
+            if (snapshot.hasData) {
+              final session = snapshot.data?.session;
+              
+              if (session != null) {
+                return AuthLoadingScreen(session: session);
+              } else {
+                return const LoginScreen();
+              }
+            }
+            
+            // If stream hasn't emitted yet, use the current session
+            if (_currentSession != null) {
+              return AuthLoadingScreen(session: _currentSession!);
+            }
+            
+            return const LoginScreen();
+          },
+        ),
       ),
     );
   }
 }
 
 class AuthLoadingScreen extends StatefulWidget {
-  const AuthLoadingScreen({super.key});
+  final Session session;
+  
+  const AuthLoadingScreen({super.key, required this.session});
 
   @override
   State<AuthLoadingScreen> createState() => _AuthLoadingScreenState();
@@ -84,6 +116,10 @@ class AuthLoadingScreen extends StatefulWidget {
 
 class _AuthLoadingScreenState extends State<AuthLoadingScreen> {
   final _supabase = Supabase.instance.client;
+  bool _isChecking = true;
+  bool _isTeacher = false;
+  bool _isStudent = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -92,75 +128,115 @@ class _AuthLoadingScreenState extends State<AuthLoadingScreen> {
   }
 
   Future<void> _checkUserType() async {
-    final userId = _supabase.auth.currentUser?.id;
+    final userId = widget.session.user.id;
     
-    if (userId == null) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
-      return;
-    }
-
     try {
       // Check teacher first
-      final teacher = await _supabase
+      final teacherResponse = await _supabase
           .from('profile_teacher')
           .select('id')
           .eq('id', userId)
           .maybeSingle();
 
-      if (teacher != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const TeacherDashboard()),
-        );
+      if (teacherResponse != null) {
+        setState(() {
+          _isTeacher = true;
+          _isChecking = false;
+        });
         return;
       }
 
       // Check student
-      final student = await _supabase
+      final studentResponse = await _supabase
           .from('profile_student')
           .select('id')
           .eq('id', userId)
           .maybeSingle();
 
-      if (student != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const StudentDashboard()),
-        );
+      if (studentResponse != null) {
+        setState(() {
+          _isStudent = true;
+          _isChecking = false;
+        });
         return;
       }
 
       // No profile found
-      await _supabase.auth.signOut();
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
+      setState(() {
+        _errorMessage = 'No profile found for this user';
+        _isChecking = false;
+      });
+      
     } catch (e) {
-      print('Error checking user type: $e');
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
+      setState(() {
+        _errorMessage = 'Error checking user type: $e';
+        _isChecking = false;
+      });
+    }
+  }
+
+  Future<void> _logoutAndRedirect() async {
+    try {
+      await _supabase.auth.signOut();
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+      }
+    } catch (e) {
+      print('Error signing out: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 20),
-            Text('Checking user profile...'),
-          ],
+    if (_isChecking) {
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 20),
+              Text('Checking user profile...'),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 64, color: Colors.red),
+              SizedBox(height: 20),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.red),
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _logoutAndRedirect,
+                child: const Text('Return to Login'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_isTeacher) {
+      return const TeacherDashboard();
+    } else if (_isStudent) {
+      return const StudentDashboard();
+    }
+
+    // Fallback - should not reach here
+    return const LoginScreen();
   }
 }

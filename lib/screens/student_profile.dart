@@ -1,4 +1,4 @@
-import 'dart:io';
+//import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_storage_helper.dart';
@@ -229,7 +229,7 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        "User details",
+                        "Butiran Pengguna",
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -247,7 +247,7 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                           fetchProfile();
                         },
                         child: Text(
-                          "Edit profile",
+                          "Edit profil",
                           style: TextStyle(
                             color: accentColor,
                             fontWeight: FontWeight.w600,
@@ -273,15 +273,15 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                     ),
                     child: Column(
                       children: [
-                        _detailRow("Email address", profile!['email'] ?? "-"),
+                        _detailRow("Alamat Email", profile!['email'] ?? "-"),
                         const Divider(height: 30),
-                        _detailRow("Phone Number", profile!['phone'] ?? "-"),
+                        _detailRow("Nombor telefon", profile!['phone'] ?? "-"),
                         const Divider(height: 30),
-                        _detailRow("Age", profile!['age']?.toString() ?? "-"),
+                        _detailRow("Umur", profile!['age']?.toString() ?? "-"),
                         const Divider(height: 30),
-                        _detailRow("Class", profile!['class'] ?? "-"),
+                        _detailRow("Kelas", profile!['class'] ?? "-"),
                         const Divider(height: 30),
-                        _detailRow("Timezone", "Asia/Kuala_Lumpur"),
+                        _detailRow("Waktu", "Asia/Kuala_Lumpur"),
                       ],
                     ),
                   ),
@@ -298,7 +298,7 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    "Miscellaneous",
+                    "Aneka",
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -322,13 +322,13 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                     ),
                     child: Column(
                       children: [
-                        _linkRow("Blog entries", () {}),
+                        _linkRow("Entri blog", () {}),
                         const Divider(height: 24),
-                        _linkRow("Forum posts", () {}),
+                        _linkRow("Catatan forum", () {}),
                         const Divider(height: 24),
-                        _linkRow("Forum discussions", () {}),
+                        _linkRow("Perbincangan forum", () {}),
                         const Divider(height: 24),
-                        _linkRow("Learning plans", () {}),
+                        _linkRow("Rancangan pembelajaran", () {}),
                       ],
                     ),
                   ),
@@ -345,7 +345,7 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    "Reports",
+                    "Laporan",
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -369,9 +369,9 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                     ),
                     child: Column(
                       children: [
-                        _linkRow("Browser sessions", () {}),
+                        _linkRow("Sesi pelayar", () {}),
                         const Divider(height: 24),
-                        _linkRow("Grades overview", () {}),
+                        _linkRow("Gambaran keseluruhan gred", () {}),
                       ],
                     ),
                   ),

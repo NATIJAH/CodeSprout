@@ -5,6 +5,11 @@ import '../providers/materials_provider.dart';
 import '../models/teaching_material.dart';
 import 'upload_material_screen.dart';
 
+// Defined theme colors
+const Color _primaryAccent = Color(0xff6b8e7c); // Soft Green/Gray
+const Color _backgroundColor = Color(0xfff9f9f9); // Light background
+const Color _cardHighlight = Color(0xffe8f0e8); // Very light green for subtle contrast
+
 class TeacherTeachingMaterial extends StatefulWidget {
   const TeacherTeachingMaterial({super.key});
 
@@ -24,16 +29,16 @@ class _TeacherTeachingMaterialState extends State<TeacherTeachingMaterial> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xfff2f6ff),
+      backgroundColor: _backgroundColor, // Changed background color
       appBar: AppBar(
         title: const Text(
-          'Teaching Materials',
+          'Bahan Mengajar',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w700,
           ),
         ),
-        backgroundColor: const Color(0xff5b7cff),
+        backgroundColor: _primaryAccent, // Changed AppBar color
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 4,
         actions: [
@@ -53,15 +58,15 @@ class _TeacherTeachingMaterialState extends State<TeacherTeachingMaterial> {
           );
         },
         icon: const Icon(Icons.upload),
-        label: const Text('Upload'),
-        backgroundColor: const Color(0xff5b7cff),
+        label: const Text('Muat Naik'),
+        backgroundColor: _primaryAccent, // Changed FAB color
       ),
       body: Consumer<MaterialsProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading && provider.materials.isEmpty) {
             return Center(
               child: CircularProgressIndicator(
-                color: const Color(0xff5b7cff),
+                color: _primaryAccent, // Changed loading indicator color
               ),
             );
           }
@@ -74,11 +79,11 @@ class _TeacherTeachingMaterialState extends State<TeacherTeachingMaterial> {
                   Icon(
                     Icons.library_books,
                     size: 100,
-                    color: const Color(0xffa0b4ff).withOpacity(0.5),
+                    color: _primaryAccent.withOpacity(0.5), // Changed icon color
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'No teaching materials yet',
+                    'Tiada bahan mengajar lagi', 
                     style: TextStyle(
                       fontSize: 20,
                       color: Color(0xff334155),
@@ -89,7 +94,7 @@ class _TeacherTeachingMaterialState extends State<TeacherTeachingMaterial> {
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 40),
                     child: Text(
-                      'Start by uploading your first teaching material\nusing the upload button below',
+                      'Mulakan dengan memuat naik bahan mengajar pertama anda\nmenggunakan butang muat naik di bawah',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Color(0xff64748b),
@@ -185,14 +190,14 @@ Row(
     Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xffe0e7ff),
+        color: _cardHighlight, // Changed class badge background
         borderRadius: BorderRadius.circular(15),
       ),
       child: Text(
-        material.className,  // Changed to show class name
-        style: const TextStyle(
+        material.className,
+        style: TextStyle(
           fontSize: 12,
-          color: Color(0xff4f46e5),
+          color: _primaryAccent, // Changed class badge text color
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -229,8 +234,8 @@ Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.download, color: Color(0xff5b7cff)),
-                title: const Text('Download'),
+                leading: Icon(Icons.download, color: _primaryAccent), // Changed icon color
+                title: const Text('Muat Turun'),
                 onTap: () {
                   Navigator.pop(context);
                   _downloadMaterial(context, material, provider);
@@ -238,8 +243,8 @@ Row(
               ),
               
               ListTile(
-                leading: const Icon(Icons.edit, color: Color(0xff5b7cff)),
-                title: const Text('Edit'),
+                leading: Icon(Icons.edit, color: _primaryAccent), // Changed icon color
+                title: const Text('Sunting'),
                 onTap: () {
                   Navigator.pop(context);
                   _editMaterial(context, material);
@@ -251,7 +256,7 @@ Row(
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.red),
                 title: const Text(
-                  'Delete',
+                  'Padam',
                   style: TextStyle(color: Colors.red),
                 ),
                 onTap: () {
@@ -272,8 +277,8 @@ Row(
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${material.title} downloaded successfully'),
-            backgroundColor: const Color(0xff5b7cff),
+            content: Text('${material.title} berjaya dimuat turun'),
+            backgroundColor: _primaryAccent, // Changed snackbar color
             duration: const Duration(seconds: 2),
           ),
         );
@@ -282,7 +287,7 @@ Row(
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to download: $e'),
+            content: Text('Gagal memuat turun: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -306,12 +311,12 @@ Row(
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Material'),
-        content: Text('Are you sure you want to delete "${material.title}"?'),
+        title: const Text('Padam Bahan'),
+        content: Text('Anda pasti mahu padam "${material.title}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Batal'),
           ),
           TextButton(
             onPressed: () async {
@@ -320,15 +325,15 @@ Row(
               
               if (success && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Material deleted successfully'),
-                    backgroundColor: Color(0xff5b7cff),
+                  SnackBar(
+                    content: const Text('Bahan berjaya dipadam'),
+                    backgroundColor: _primaryAccent, // Changed snackbar color
                   ),
                 );
               }
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: const Text('Padam'),
           ),
         ],
       ),

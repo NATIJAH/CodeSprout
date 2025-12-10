@@ -1,36 +1,144 @@
+// student/lib/page/pdf_student_page.dart
 import 'package:flutter/material.dart';
 import '../service/supabase_service.dart';
 import '../theme/color.dart';
+import 'dart:html' as html;
+import 'package:flutter/foundation.dart';
 
 class PdfStudentPage extends StatefulWidget {
+  final Map<String, dynamic>? currentFolder;
+  
+  const PdfStudentPage({Key? key, this.currentFolder}) : super(key: key);
+  
   @override
   _PdfStudentPageState createState() => _PdfStudentPageState();
 }
 
 class _PdfStudentPageState extends State<PdfStudentPage> {
   List<Map<String, dynamic>> _folderList = [];
+  List<Map<String, dynamic>> _pdfList = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadFolders();
+    // Muat kosong dahulu untuk elak ralat
+    setState(() {
+      _folderList = [];
+      _pdfList = [];
+    });
+    
+    // Kemudian muat data sebenar
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadContent();
+    });
   }
 
-  Future<void> _loadFolders() async {
+  Future<void> _loadContent() async {
     try {
-      final response = await SupabaseService.client
-          .from('pdf_folder')
-          .select('*')
-          .order('created_at', ascending: false);
-
+      print('🚀 Pelajar: Mula memuat kandungan');
+      
+      final String? parentFolderId = widget.currentFolder?['id'];
+      print('📂 ID Folder Induk: $parentFolderId');
+      
+      List<Map<String, dynamic>> folderList = [];
+      List<Map<String, dynamic>> pdfList = [];
+      
+      // CUBA MUAT FOLDER
+      try {
+        dynamic folderResponse;
+        if (parentFolderId != null) {
+          folderResponse = await SupabaseService.client
+              .from('pdf_folder')
+              .select('*')
+              .eq('parent_folder_id', parentFolderId)
+              .order('created_at', ascending: false)
+              .then((response) {
+                print('📁 Respons API Folder: $response');
+                return response;
+              }).catchError((e) {
+                print('❌ Ralat API Folder: $e');
+                return [];
+              });
+        } else {
+          folderResponse = await SupabaseService.client
+              .from('pdf_folder')
+              .select('*')
+              .filter('parent_folder_id', 'is', 'null')
+              .order('created_at', ascending: false)
+              .then((response) {
+                print('📁 Respons API Folder Root: $response');
+                return response;
+              }).catchError((e) {
+                print('❌ Ralat API Folder Root: $e');
+                return [];
+              });
+        }
+        
+        // PENUKARAN SELAMAT
+        if (folderResponse != null && folderResponse is List) {
+          folderList = List<Map<String, dynamic>>.from(folderResponse);
+        }
+      } catch (e) {
+        print('⚠️ Pengecualian muat folder: $e');
+        folderList = [];
+      }
+      
+      // CUBA MUAT PDF
+      try {
+        dynamic pdfResponse;
+        if (parentFolderId != null) {
+          pdfResponse = await SupabaseService.client
+              .from('teacher_pdf')
+              .select('*')
+              .eq('folder_id', parentFolderId)
+              .order('created_at', ascending: false)
+              .then((response) {
+                print('📄 Respons API PDF: $response');
+                return response;
+              }).catchError((e) {
+                print('❌ Ralat API PDF: $e');
+                return [];
+              });
+        } else {
+          pdfResponse = await SupabaseService.client
+              .from('teacher_pdf')
+              .select('*')
+              .filter('folder_id', 'is', 'null')
+              .order('created_at', ascending: false)
+              .then((response) {
+                print('📄 Respons API PDF Root: $response');
+                return response;
+              }).catchError((e) {
+                print('❌ Ralat API PDF Root: $e');
+                return [];
+              });
+        }
+        
+        // PENUKARAN SELAMAT
+        if (pdfResponse != null && pdfResponse is List) {
+          pdfList = List<Map<String, dynamic>>.from(pdfResponse);
+        }
+      } catch (e) {
+        print('⚠️ Pengecualian muat PDF: $e');
+        pdfList = [];
+      }
+      
+      print('✅ Akhir: ${folderList.length} folder, ${pdfList.length} PDF');
+      
       setState(() {
-        _folderList = List<Map<String, dynamic>>.from(response);
+        _folderList = folderList;
+        _pdfList = pdfList;
         _isLoading = false;
       });
+      
     } catch (e) {
-      print('Error loading folders: $e');
-      setState(() => _isLoading = false);
+      print('💥 RALAT KRITIKAL dalam _loadContent: $e');
+      setState(() {
+        _folderList = [];
+        _pdfList = [];
+        _isLoading = false;
+      });
     }
   }
 
@@ -38,7 +146,123 @@ class _PdfStudentPageState extends State<PdfStudentPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => FolderPdfsPage(folder: folder),
+        builder: (context) => PdfStudentPage(currentFolder: folder),
+      ),
+    );
+  }
+
+  void _goBack() {
+    if (widget.currentFolder != null) {
+      Navigator.pop(context);
+    }
+  }
+
+  Future<void> _downloadPdf(Map<String, dynamic> pdf) async {
+    try {
+      print('📥 Cuba muat turun: ${pdf['title']}');
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Menyediakan muat turun...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      
+      // MUAT TURUN MUDAH - TANPA FILEPICKER
+      if (kIsWeb) {
+        try {
+          final bytes = await SupabaseService.client.storage
+              .from('teacher-pdf')
+              .download(pdf['file_path']);
+              
+          if (bytes != null) {
+            final blob = html.Blob([bytes]);
+            final url = html.Url.createObjectUrlFromBlob(blob);
+            final anchor = html.document.createElement('a') as html.AnchorElement
+              ..href = url
+              ..style.display = 'none'
+              ..download = pdf['file_name'] ?? 'dokumen.pdf';
+            
+            html.document.body!.children.add(anchor);
+            anchor.click();
+            html.document.body!.children.remove(anchor);
+            html.Url.revokeObjectUrl(url);
+            
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ Muat turun bermula'),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        } catch (e) {
+          print('Ralat muat turun web: $e');
+        }
+      } else {
+        // MUDAH ALIH - hanya tunjuk mesej kejayaan
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Sedia untuk dimuat turun'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      
+    } catch (e) {
+      print('Ralat muat turun: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memuat turun'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _buildFolderCard(Map<String, dynamic> folder) {
+    return Card(
+      elevation: 2,
+      color: StudentColors.card,
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        leading: Icon(Icons.folder, color: Colors.amber, size: 32),
+        title: Text(
+          folder['name'] ?? 'Folder',
+          style: TextStyle(fontWeight: FontWeight.bold, color: StudentColors.textDark),
+        ),
+        subtitle: folder['description'] != null 
+            ? Text(folder['description']!, style: TextStyle(color: StudentColors.textLight))
+            : Text('Ketik untuk buka', style: TextStyle(color: StudentColors.textLight)),
+        trailing: Icon(Icons.arrow_forward_ios, size: 16, color: StudentColors.textLight),
+        onTap: () => _openFolder(folder),
+      ),
+    );
+  }
+
+  Widget _buildPdfCard(Map<String, dynamic> pdf) {
+    return Card(
+      elevation: 2,
+      color: StudentColors.card,
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        leading: Icon(Icons.picture_as_pdf, color: Colors.red, size: 32),
+        title: Text(
+          pdf['title'] ?? 'Dokumen PDF',
+          style: TextStyle(fontWeight: FontWeight.bold, color: StudentColors.textDark),
+        ),
+        subtitle: Text('Ketik untuk muat turun', style: TextStyle(color: StudentColors.textLight)),
+        trailing: IconButton(
+          icon: Icon(Icons.download, color: StudentColors.success), // ✅ TUKAR KE HIJAU
+          onPressed: () => _downloadPdf(pdf),
+          tooltip: 'Muat Turun',
+        ),
+        onTap: () => _downloadPdf(pdf),
       ),
     );
   }
@@ -48,13 +272,35 @@ class _PdfStudentPageState extends State<PdfStudentPage> {
     return Scaffold(
       backgroundColor: StudentColors.background,
       appBar: AppBar(
-        title: Text('Learning Materials'),
-        backgroundColor: StudentColors.primaryBlue,
+        title: Text(widget.currentFolder?['name'] ?? 'Bahan Pembelajaran'),
+        backgroundColor: StudentColors.success, // ✅ TUKAR KE HIJAU
         foregroundColor: Colors.white,
+        leading: widget.currentFolder != null 
+            ? IconButton(
+                icon: Icon(Icons.arrow_back),
+                onPressed: _goBack,
+              )
+            : null,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: _loadContent,
+            tooltip: 'Segar Semula',
+          ),
+        ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : _folderList.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: StudentColors.success), // ✅ TUKAR KE HIJAU
+                  SizedBox(height: 16),
+                  Text('Memuatkan bahan...', style: TextStyle(color: StudentColors.textDark)),
+                ],
+              ),
+            )
+          : (_folderList.isEmpty && _pdfList.isEmpty)
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -62,359 +308,57 @@ class _PdfStudentPageState extends State<PdfStudentPage> {
                       Icon(Icons.folder_open, size: 80, color: Colors.grey),
                       SizedBox(height: 16),
                       Text(
-                        'No learning materials',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: StudentColors.textLight,
-                        ),
+                        'Tiada kandungan',
+                        style: TextStyle(fontSize: 18, color: Colors.grey),
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'Your teacher will add materials here',
+                        'Folder ini kosong',
                         style: TextStyle(color: Colors.grey),
                       ),
                     ],
                   ),
                 )
               : RefreshIndicator(
-                  onRefresh: _loadFolders,
-                  child: ListView.builder(
-                    padding: EdgeInsets.all(16),
-                    itemCount: _folderList.length,
-                    itemBuilder: (context, index) {
-                      final folder = _folderList[index];
-                      return _buildFolderCard(folder);
-                    },
-                  ),
-                ),
-    );
-  }
-
-  Widget _buildFolderCard(Map<String, dynamic> folder) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      margin: EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: Container(
-          padding: EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: StudentColors.primaryBlue.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            Icons.folder,
-            color: StudentColors.primaryBlue,
-            size: 28,
-          ),
-        ),
-        title: Text(
-          folder['name'],
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: StudentColors.textDark,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (folder['description'] != null)
-              Text(
-                folder['description'],
-                style: TextStyle(
-                  fontSize: 14,
-                  color: StudentColors.textLight,
-                ),
-              ),
-            SizedBox(height: 4),
-            Text(
-              'Tap to view materials →',
-              style: TextStyle(
-                fontSize: 12,
-                color: StudentColors.primaryBlue,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        trailing: Icon(
-          Icons.chevron_right,
-          color: StudentColors.primaryBlue,
-        ),
-        onTap: () => _openFolder(folder),
-      ),
-    );
-  }
-}
-
-class FolderPdfsPage extends StatefulWidget {
-  final Map<String, dynamic> folder;
-
-  const FolderPdfsPage({required this.folder});
-
-  @override
-  _FolderPdfsPageState createState() => _FolderPdfsPageState();
-}
-
-class _FolderPdfsPageState extends State<FolderPdfsPage> {
-  List<Map<String, dynamic>> _pdfList = [];
-  Map<String, dynamic> _progressMap = {};
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    try {
-      // Load PDFs for this folder
-      final pdfResponse = await SupabaseService.client
-          .from('teacher_pdf')
-          .select('*')
-          .eq('folder_id', widget.folder['id'])
-          .order('created_at', ascending: true);
-
-      // Load progress for current user
-      final user = SupabaseService.client.auth.currentUser;
-      if (user != null) {
-        final progressResponse = await SupabaseService.client
-            .from('student_pdf_progress')
-            .select('*')
-            .eq('student_id', user.id);
-
-        // Convert progress list to map for easy lookup
-        for (var progress in progressResponse) {
-          _progressMap[progress['pdf_id']] = progress;
-        }
-      }
-
-      setState(() {
-        _pdfList = List<Map<String, dynamic>>.from(pdfResponse);
-        _isLoading = false;
-      });
-    } catch (e) {
-      print('Error loading PDFs: $e');
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _markAsViewed(String pdfId) async {
-    try {
-      final user = SupabaseService.client.auth.currentUser;
-      if (user == null) return;
-
-      await SupabaseService.client.from('student_pdf_progress').upsert({
-        'student_id': user.id,
-        'pdf_id': pdfId,
-        'viewed': true,
-        'last_viewed': DateTime.now().toIso8601String(),
-      });
-
-      // Update local state
-      setState(() {
-        _progressMap[pdfId] = {
-          'viewed': true,
-          'last_viewed': DateTime.now().toIso8601String(),
-        };
-      });
-    } catch (e) {
-      print('Error marking as viewed: $e');
-    }
-  }
-
-  void _openPdf(Map<String, dynamic> pdf) {
-    _markAsViewed(pdf['id']);
-    
-    // TODO: Replace with actual PDF viewer
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(pdf['title']),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.picture_as_pdf, size: 64, color: Colors.red),
-            SizedBox(height: 16),
-            Text('PDF Viewer'),
-            SizedBox(height: 8),
-            Text(
-              'Title: ${pdf['title']}',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            if (pdf['description'] != null)
-              Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text('Description: ${pdf['description']}'),
-              ),
-            SizedBox(height: 16),
-            Text(
-              'In a real app, this would open a PDF viewer',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              print('Opening PDF: ${pdf['title']}');
-              Navigator.pop(context);
-              // TODO: Add actual PDF viewer like:
-              // Navigator.push(context, MaterialPageRoute(
-              //   builder: (context) => PdfViewerPage(pdfUrl: pdf['file_url'])
-              // ));
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: StudentColors.primaryBlue,
-            ),
-            child: Text('Open PDF', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: StudentColors.background,
-      appBar: AppBar(
-        title: Text(widget.folder['name']),
-        backgroundColor: StudentColors.primaryBlue,
-        foregroundColor: Colors.white,
-      ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : _pdfList.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  onRefresh: _loadContent,
+                  color: StudentColors.success, // ✅ TUKAR KE HIJAU
+                  child: ListView(
                     children: [
-                      Icon(Icons.picture_as_pdf, size: 80, color: Colors.grey),
-                      SizedBox(height: 16),
-                      Text(
-                        'No materials in this folder',
-                        style: TextStyle(fontSize: 18),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Your teacher will add materials here',
-                        style: TextStyle(color: Colors.grey),
-                      ),
+                      if (_folderList.isNotEmpty) ...[
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
+                          child: Text(
+                            'Folder',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: StudentColors.textDark,
+                            ),
+                          ),
+                        ),
+                        ..._folderList.map((folder) => _buildFolderCard(folder)),
+                        SizedBox(height: 16),
+                      ],
+                      
+                      if (_pdfList.isNotEmpty) ...[
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+                          child: Text(
+                            'Dokumen PDF (${_pdfList.length})',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: StudentColors.textDark,
+                            ),
+                          ),
+                        ),
+                        ..._pdfList.map((pdf) => _buildPdfCard(pdf)),
+                      ],
+                      
+                      SizedBox(height: 80),
                     ],
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  child: ListView.builder(
-                    padding: EdgeInsets.all(16),
-                    itemCount: _pdfList.length,
-                    itemBuilder: (context, index) {
-                      final pdf = _pdfList[index];
-                      final isViewed = _progressMap.containsKey(pdf['id']) &&
-                          _progressMap[pdf['id']]['viewed'] == true;
-                      return _buildPdfCard(pdf, isViewed);
-                    },
-                  ),
                 ),
-    );
-  }
-
-  Widget _buildPdfCard(Map<String, dynamic> pdf, bool isViewed) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      margin: EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: Container(
-          padding: EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isViewed
-                ? StudentColors.success.withOpacity(0.1)
-                : Colors.red.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            Icons.picture_as_pdf,
-            color: isViewed ? StudentColors.success : Colors.red,
-            size: 28,
-          ),
-        ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                pdf['title'],
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: StudentColors.textDark,
-                ),
-              ),
-            ),
-            if (isViewed)
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: StudentColors.success.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.check, size: 12, color: StudentColors.success),
-                    SizedBox(width: 4),
-                    Text(
-                      'Viewed',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: StudentColors.success,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (pdf['description'] != null)
-              Text(
-                pdf['description'],
-                style: TextStyle(
-                  fontSize: 14,
-                  color: StudentColors.textLight,
-                ),
-              ),
-            SizedBox(height: 4),
-            Text(
-              'Tap to open →',
-              style: TextStyle(
-                fontSize: 12,
-                color: StudentColors.primaryBlue,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        trailing: Icon(
-          Icons.open_in_new,
-          color: StudentColors.primaryBlue,
-        ),
-        onTap: () => _openPdf(pdf),
-      ),
     );
   }
 }

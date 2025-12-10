@@ -8,6 +8,7 @@ import 'student_mcq.dart';
 import 'open_student_chat.dart';
 import 'student_profile.dart';
 import 'activity_hub.dart';
+import 'account_view.dart';
 import 'login_screen.dart';
 
 class StudentDashboard extends StatefulWidget {
@@ -112,7 +113,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
               const OpenStudentChat(),
             ),
             _drawerTile(Icons.event, "Aktiviti", context, const ActivityHub()),
-            _drawerTile(Icons.settings, "Tetapan", context, const StudentMcq()),
+            _drawerTile(Icons.settings, "Tetapan", context, const AccountView()),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.logout, color: Color(0xff4f7f67)),

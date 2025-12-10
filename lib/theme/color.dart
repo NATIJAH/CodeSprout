@@ -16,18 +16,19 @@ class TeacherColors {
 
 // Student-specific colors
 class StudentColors {
-  static const primaryBlue = Color(0xFF4A90E2);
-  static const secondaryBlue = Color(0xFF64B5F6);
-  static const background = Color(0xFFEFF5FC);
+  static const primaryGreen = Color(0xFF7EA66B); // GANTI primaryBlue
+  static const secondaryGreen = Color(0xFF9BC588); // GANTI secondaryBlue
+  static const background = Color(0xFFDFE5DB); // GANTI warna latar
   static const card = Color(0xFFFFFFFF);
   static const textDark = Color(0xFF333333);
   static const textLight = Color(0xFF666666);
-  static const success = Color(0xFF4CAF50);
+  static const success = Color(0xFF7EA66B); // sama dengan primaryGreen
   static const warning = Color(0xFFFF9800);
-  static const progress = Color(0xFF2196F3);
+  static const progress = Color(0xFF7EA66B); // GANTI ke hijau
   static const danger = Color(0xFFF44336);
   static const accent = Color(0xFF00BCD4);
-  static const topBar = Color(0xFF4A90E2);
+
+  static const topBar = Color(0xFFD4DFC7); 
 }
 
 // Common colors that can be used in both

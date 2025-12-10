@@ -83,10 +83,10 @@ class _UpdateAccountSettingsPageState extends State<UpdateAccountSettingsPage> {
     return Scaffold(
       backgroundColor: const Color(0xfff6f5f8), // soft pastel background
       appBar: AppBar(
-        backgroundColor: Colors.pink.shade200,
+        backgroundColor: Color.fromARGB(255, 201, 243, 215),
         elevation: 0,
         title: const Text(
-          "Edit Account Settings",
+          "Edit Tetapan Akaun",
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
       ),
@@ -97,13 +97,13 @@ class _UpdateAccountSettingsPageState extends State<UpdateAccountSettingsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _label("Username"),
-                  _inputField(usernameController, "Enter username"),
+                  _label("Nama pengguna"),
+                  _inputField(usernameController, "Masukkan nama pengguna"),
 
                   const SizedBox(height: 20),
 
                   _label("Bio"),
-                  _inputField(bioController, "Write something about yourself", maxLines: 3),
+                  _inputField(bioController, "Tulis sesuatu tentang diri anda", maxLines: 3),
 
                   const Spacer(),
 
@@ -112,14 +112,14 @@ class _UpdateAccountSettingsPageState extends State<UpdateAccountSettingsPage> {
                     child: ElevatedButton(
                       onPressed: saveData,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.pink.shade300,
+                        backgroundColor: Color.fromARGB(255, 197, 247, 213),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       child: const Text(
-                        "Save Changes",
+                        "Simpan Perubahan",
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                     ),

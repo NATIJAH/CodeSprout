@@ -16,7 +16,7 @@ class _AccountViewState extends State<AccountView> {
   bool loading = true;
   String? errorMsg;
 
-  final Color accentColor = const Color(0xFF0066CC);
+  final Color accentColor = Color.fromARGB(255, 0, 0, 248);
   final Color cardColor = Colors.white;
   final Color headerColor = const Color(0xFFE8F4F8);
   final Color dangerColor = const Color(0xFFDC3545);
@@ -34,7 +34,7 @@ class _AccountViewState extends State<AccountView> {
       if (user == null) {
         setState(() {
           loading = false;
-          errorMsg = "No user logged in";
+          errorMsg = "Tiada pengguna log masuk";
         });
         return;
       }
@@ -52,7 +52,7 @@ class _AccountViewState extends State<AccountView> {
           'username': user.email?.split('@')[0] ?? 'user',
           'auth_email': user.email,
           'account_type': 'Student',
-          'status': 'Active',
+          'status': 'Aktif',
           'two_factor_enabled': false,
           'email_notifications': true,
           'sms_notifications': false,
@@ -82,7 +82,7 @@ class _AccountViewState extends State<AccountView> {
             Icon(Icons.warning_amber_rounded, color: dangerColor, size: 30),
             const SizedBox(width: 12),
             const Text(
-              "Delete Account",
+              "Padam akaun",
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ],
@@ -92,14 +92,14 @@ class _AccountViewState extends State<AccountView> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              "This action is IRREVERSIBLE and will:",
+              "Tindakan ini TIDAK DAPAT DIBALIKKAN dan akan:",
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            _dangerPoint("Delete all your profile data"),
-            _dangerPoint("Remove all blog entries and posts"),
-            _dangerPoint("Delete learning plans and grades"),
-            _dangerPoint("Permanently close your account"),
+            _dangerPoint("Padamkan semua data profil anda"),
+            _dangerPoint("Alih keluar semua entri dan siaran blog"),
+            _dangerPoint("Padamkan rancangan pembelajaran dan gred"),
+            _dangerPoint("Tutup akaun anda secara kekal"),
             const SizedBox(height: 20),
             const Text(
               'Type "DELETE" to confirm:',
@@ -109,7 +109,7 @@ class _AccountViewState extends State<AccountView> {
             TextField(
               controller: confirmController,
               decoration: InputDecoration(
-                hintText: "DELETE",
+                hintText: "PADAM",
                 border: OutlineInputBorder(
                   borderSide: BorderSide(color: dangerColor),
                 ),
@@ -123,11 +123,11 @@ class _AccountViewState extends State<AccountView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
+            child: const Text("Batalkan"),
           ),
           ElevatedButton(
             onPressed: () async {
-              if (confirmController.text.trim() == "DELETE") {
+              if (confirmController.text.trim() == "PADAM") {
                 Navigator.pop(context);
                 await deleteAccount();
               } else {
@@ -143,7 +143,7 @@ class _AccountViewState extends State<AccountView> {
               backgroundColor: dangerColor,
               foregroundColor: Colors.white,
             ),
-            child: const Text("Delete Account"),
+            child: const Text("Padam Akaun"),
           ),
         ],
       ),
@@ -205,7 +205,7 @@ class _AccountViewState extends State<AccountView> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Account deleted successfully'),
+          content: Text('Akaun berjaya dipadamkan'),
           backgroundColor: Colors.green,
         ),
       );
@@ -229,7 +229,7 @@ class _AccountViewState extends State<AccountView> {
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Change Password"),
+        title: const Text("Tukar kata laluan"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -237,7 +237,7 @@ class _AccountViewState extends State<AccountView> {
               controller: newPasswordController,
               obscureText: true,
               decoration: const InputDecoration(
-                labelText: "New Password",
+                labelText: "Kata laluan baru",
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.lock_outline),
               ),
@@ -247,7 +247,7 @@ class _AccountViewState extends State<AccountView> {
               controller: confirmPasswordController,
               obscureText: true,
               decoration: const InputDecoration(
-                labelText: "Confirm Password",
+                labelText: "Sahkan kata laluan",
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.lock_outline),
               ),
@@ -257,14 +257,14 @@ class _AccountViewState extends State<AccountView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
+            child: const Text("Batal"),
           ),
           ElevatedButton(
             onPressed: () async {
               if (newPasswordController.text != confirmPasswordController.text) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Passwords do not match'),
+                    content: Text('Kata laluan tidak sepadan'),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -274,7 +274,7 @@ class _AccountViewState extends State<AccountView> {
               if (newPasswordController.text.length < 6) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Password must be at least 6 characters'),
+                    content: Text('Kata laluan mestilah sekurang-kurangnya 6 aksara'),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -290,7 +290,7 @@ class _AccountViewState extends State<AccountView> {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Password changed successfully'),
+                    content: Text('Kata laluan berjaya ditukar'),
                     backgroundColor: Colors.green,
                   ),
                 );
@@ -304,7 +304,7 @@ class _AccountViewState extends State<AccountView> {
                 );
               }
             },
-            child: const Text("Change Password"),
+            child: const Text("Tukar kata laluan"),
           ),
         ],
       ),
@@ -337,7 +337,7 @@ class _AccountViewState extends State<AccountView> {
         backgroundColor: Colors.white,
         elevation: 1,
         title: const Text(
-          "Account Settings",
+          "Tetapan Akaun",
           style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600),
         ),
         centerTitle: false,
@@ -382,7 +382,7 @@ class _AccountViewState extends State<AccountView> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      accountData!['status'] ?? 'Active',
+                      accountData!['status'] ?? 'Aktif',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -398,13 +398,13 @@ class _AccountViewState extends State<AccountView> {
 
             // Account Information Section
             _buildSection(
-              "Account Information",
+              "Maklumat Akaun",
               [
-                _infoTile("Username", accountData!['username'] ?? '-', Icons.person_outline),
+                _infoTile("Nama Pengguna", accountData!['username'] ?? '-', Icons.person_outline),
                 _infoTile("Email", user?.email ?? '-', Icons.email_outlined),
-                _infoTile("Account Type", accountData!['account_type'] ?? 'Student', Icons.school_outlined),
-                _infoTile("User ID", user?.id ?? '-', Icons.fingerprint, isSmall: true),
-                _infoTile("Created", _formatDate(user?.createdAt), Icons.calendar_today_outlined),
+                _infoTile("Jenis Akaun", accountData!['account_type'] ?? 'Student', Icons.school_outlined),
+                _infoTile("ID pengguna", user?.id ?? '-', Icons.fingerprint, isSmall: true),
+                _infoTile("Dicipta", _formatDate(user?.createdAt), Icons.calendar_today_outlined),
               ],
               trailing: TextButton.icon(
                 onPressed: () async {
@@ -423,10 +423,10 @@ class _AccountViewState extends State<AccountView> {
 
             // Security Section
             _buildSection(
-              "Security & Privacy",
+              "Keselamatan & Privasi",
               [
                 _switchTile(
-                  "Two-Factor Authentication",
+                  "Pengesahan Dua Faktor",
                   accountData!['two_factor_enabled'] ?? false,
                   Icons.security_outlined,
                   (value) async {
@@ -437,17 +437,17 @@ class _AccountViewState extends State<AccountView> {
                     fetchAccountData();
                   },
                 ),
-                _infoTile("Privacy Level", accountData!['privacy_level'] ?? 'Public', Icons.privacy_tip_outlined),
-                _actionTile("Change Password", Icons.lock_outline, changePassword),
+                _infoTile("Tahap privasi", accountData!['privacy_level'] ?? 'Public', Icons.privacy_tip_outlined),
+                _actionTile("Tukar kata laluan", Icons.lock_outline, changePassword),
               ],
             ),
 
             // Preferences Section
             _buildSection(
-              "Preferences",
+              "Keutamaan",
               [
                 _switchTile(
-                  "Email Notifications",
+                  "Pemberitahuan Email",
                   accountData!['email_notifications'] ?? true,
                   Icons.email_outlined,
                   (value) async {
@@ -459,7 +459,7 @@ class _AccountViewState extends State<AccountView> {
                   },
                 ),
                 _switchTile(
-                  "SMS Notifications",
+                  "Pemberitahuan SMS",
                   accountData!['sms_notifications'] ?? false,
                   Icons.sms_outlined,
                   (value) async {
@@ -470,7 +470,7 @@ class _AccountViewState extends State<AccountView> {
                     fetchAccountData();
                   },
                 ),
-                _infoTile("Language", accountData!['language'] ?? 'English', Icons.language_outlined),
+                _infoTile("Bahasa", accountData!['language'] ?? 'English', Icons.language_outlined),
               ],
             ),
 
@@ -493,7 +493,7 @@ class _AccountViewState extends State<AccountView> {
                         Icon(Icons.warning_amber_rounded, color: dangerColor),
                         const SizedBox(width: 12),
                         const Text(
-                          "Danger Zone",
+                          "",
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -504,7 +504,7 @@ class _AccountViewState extends State<AccountView> {
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      "Once you delete your account, there is no going back. Please be certain.",
+                      "Sebaik sahaja anda memadamkan akaun anda, anda tidak boleh kembali. Sila pastikan.",
                       style: TextStyle(color: Colors.black87),
                     ),
                     const SizedBox(height: 16),
@@ -513,7 +513,7 @@ class _AccountViewState extends State<AccountView> {
                       child: ElevatedButton.icon(
                         onPressed: showDeleteAccountDialog,
                         icon: const Icon(Icons.delete_forever),
-                        label: const Text("Delete Account"),
+                        label: const Text("Padam Akaun"),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: dangerColor,
                           foregroundColor: Colors.white,
