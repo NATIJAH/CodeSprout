@@ -3,6 +3,14 @@ import 'package:provider/provider.dart';
 import '../providers/materials_provider.dart';
 import '../models/teaching_material.dart';
 
+// Defined theme colors
+const Color _primaryAccent = Color(0xff6b8e7c); // Soft Green/Gray Accent
+const Color _backgroundColor = Color(0xfff9f9f9); // Light background
+const Color _cardHighlight = Color(0xffe8f0e8); // Light muted green for badges/fills
+const Color _textColor = Color(0xff334155); // Dark text for contrast
+const Color _subTextColor = Color(0xff64748b); // Subdued text color
+
+
 class StudentTeachingMaterial extends StatefulWidget {
   const StudentTeachingMaterial({super.key});
 
@@ -22,24 +30,28 @@ class _StudentTeachingMaterialState extends State<StudentTeachingMaterial> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xffdfeee7),
+      backgroundColor: _backgroundColor,
       appBar: AppBar(
         title: const Text(
-          'Study Materials',
+          'Bahan Pembelajaran',
           style: TextStyle(
-            color: Color(0xff2c4a3f),
-            fontWeight: FontWeight.bold,
+            // FIX 1: Change title color to white
+            color: Colors.white, 
+            // FIX 2: Use heavier font weight (w700)
+            fontWeight: FontWeight.w700, 
           ),
         ),
-        backgroundColor: const Color(0xff4f7f67),
-        iconTheme: const IconThemeData(color: Colors.white),
+        // FIX 3: Change AppBar background to the primary accent color
+        backgroundColor: _primaryAccent, 
+        iconTheme: const IconThemeData(color: Colors.white), // Ensures back button is white
+        elevation: 4, // Added elevation to match teacher's AppBar
       ),
       body: Consumer<MaterialsProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading && provider.materials.isEmpty) {
             return Center(
               child: CircularProgressIndicator(
-                color: const Color(0xff4f7f67),
+                color: _primaryAccent,
               ),
             );
           }
@@ -52,14 +64,14 @@ class _StudentTeachingMaterialState extends State<StudentTeachingMaterial> {
                   Icon(
                     Icons.school,
                     size: 100,
-                    color: const Color(0xff6b9c7d).withOpacity(0.5),
+                    color: _primaryAccent.withOpacity(0.5),
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'No study materials available',
+                    'Tiada bahan pembelajaran tersedia',
                     style: TextStyle(
                       fontSize: 20,
-                      color: Color(0xff2c4a3f),
+                      color: _textColor,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -67,10 +79,10 @@ class _StudentTeachingMaterialState extends State<StudentTeachingMaterial> {
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 40),
                     child: Text(
-                      'Your teachers will upload materials here for you to study',
+                      'Guru anda akan memuat naik bahan di sini untuk anda belajar',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Color(0xff6b9c7d),
+                        color: _subTextColor,
                       ),
                     ),
                   ),
@@ -136,7 +148,7 @@ class _StudentTeachingMaterialState extends State<StudentTeachingMaterial> {
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xff2c4a3f),
+                        color: _textColor,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -148,7 +160,7 @@ class _StudentTeachingMaterialState extends State<StudentTeachingMaterial> {
                       material.description,
                       style: const TextStyle(
                         fontSize: 14,
-                        color: Color(0xff6b9c7d),
+                        color: _subTextColor,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -161,14 +173,14 @@ Row(
     Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xffdfeee7),
+        color: _cardHighlight,
         borderRadius: BorderRadius.circular(15),
       ),
       child: Text(
-        material.className,  // Changed to show class name
-        style: const TextStyle(
+        material.className,
+        style: TextStyle(
           fontSize: 12,
-          color: Color(0xff4f7f67),
+          color: _primaryAccent,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -177,8 +189,7 @@ Row(
     const Spacer(),
     
     IconButton(
-      icon: const Icon(Icons.download, size: 20),
-      color: const Color(0xff4f7f67),
+      icon: Icon(Icons.download, size: 20, color: _primaryAccent),
       onPressed: () => _downloadMaterial(context, material, provider),
     ),
   ],
@@ -187,10 +198,10 @@ Row(
                     const SizedBox(height: 4),
                     
                     Text(
-                      'By ${material.teacherName} • ${material.readableFileSize}',
+                      'Oleh ${material.teacherName} • ${material.readableFileSize}',
                       style: const TextStyle(
                         fontSize: 11,
-                        color: Color(0xffa8c6b5),
+                        color: _subTextColor,
                       ),
                     ),
                   ],
@@ -209,8 +220,8 @@ Row(
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${material.title} downloaded successfully'),
-            backgroundColor: const Color(0xff4f7f67),
+            content: Text('${material.title} berjaya dimuat turun'),
+            backgroundColor: _primaryAccent,
             duration: const Duration(seconds: 2),
           ),
         );
@@ -219,7 +230,7 @@ Row(
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to download: $e'),
+            content: Text('Gagal memuat turun: $e'),
             backgroundColor: Colors.red,
           ),
         );
