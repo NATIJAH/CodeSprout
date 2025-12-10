@@ -4,6 +4,11 @@ import 'package:file_picker/file_picker.dart';
 import '../providers/materials_provider.dart';
 import '../models/teaching_material.dart';
 
+// Defined theme colors
+const Color _primaryAccent = Color(0xff6b8e7c); // Soft Green/Gray
+const Color _backgroundColor = Color(0xfff9f9f9); // Light background
+const Color _cardHighlight = Color(0xffe8f0e8); // Very light green for subtle contrast
+
 class UploadMaterialScreen extends StatefulWidget {
   final bool isEditing;
   
@@ -90,8 +95,8 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Material updated successfully'),
-            backgroundColor: const Color(0xff5b7cff),
+            content: const Text('Bahan berjaya dikemaskini'),
+            backgroundColor: _primaryAccent, // Changed snackbar color
           ),
         );
         Navigator.pop(context);
@@ -102,7 +107,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
       if (selectedFile == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please select a file first'),
+            content: Text('Sila pilih fail dahulu'),
             backgroundColor: Colors.red,
           ),
         );
@@ -119,8 +124,8 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Material uploaded successfully'),
-            backgroundColor: const Color(0xff5b7cff),
+            content: const Text('Bahan berjaya dimuat naik'),
+            backgroundColor: _primaryAccent, // Changed snackbar color
           ),
         );
         Navigator.pop(context);
@@ -144,9 +149,10 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
     });
   }
 
-  Color get _primaryColor => const Color(0xff5b7cff);
-  Color get _backgroundColor => const Color(0xfff2f6ff);
-  Color get _cardColor => const Color(0xffe0e7ff);
+  // NOTE: Local colors updated to use consistent theme colors
+  Color get _primaryColor => _primaryAccent;
+  Color get _backgroundColorLocal => _backgroundColor; 
+  Color get _cardColor => _cardHighlight; 
   Color get _textColor => const Color(0xff334155);
   Color get _subTextColor => const Color(0xff64748b);
 
@@ -156,10 +162,10 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
     final selectedFile = provider.selectedFile;
 
     return Scaffold(
-      backgroundColor: _backgroundColor,
+      backgroundColor: _backgroundColorLocal, // Used new background color
       appBar: AppBar(
-        title: Text(widget.isEditing ? 'Edit Material' : 'Upload Material'),
-        backgroundColor: _primaryColor,
+        title: Text(widget.isEditing ? 'Sunting Bahan' : 'Muat Naik Bahan'),
+        backgroundColor: _primaryColor, // Used new primary color
         foregroundColor: Colors.white,
         actions: [
           if (widget.isEditing)
@@ -193,8 +199,9 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                   ),
                   child: Column(
                     children: [
+                      // FIX 1: Removed Unicode character
                       const Text(
-                        '📁 Select File',
+                        'Pilih Fail', 
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
@@ -214,7 +221,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                         TextButton(
                           onPressed: provider.clearSelectedFile,
                           child: Text(
-                            'Change File',
+                            'Tukar Fail',
                             style: TextStyle(color: _primaryColor),
                           ),
                         ),
@@ -241,8 +248,9 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // FIX 2: Removed Unicode character
                     const Text(
-                      '📝 Material Details',
+                      'Butiran Bahan', 
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -253,7 +261,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                     TextFormField(
                       controller: _titleController,
                       decoration: InputDecoration(
-                        labelText: 'Title *',
+                        labelText: 'Tajuk *',
                         labelStyle: TextStyle(color: _subTextColor),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -268,7 +276,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter a title';
+                          return 'Sila masukkan tajuk';
                         }
                         return null;
                       },
@@ -279,7 +287,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                     TextFormField(
                       controller: _descriptionController,
                       decoration: InputDecoration(
-                        labelText: 'Description *',
+                        labelText: 'Keterangan *',
                         labelStyle: TextStyle(color: _subTextColor),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -296,7 +304,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                       maxLines: 3,
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter a description';
+                          return 'Sila masukkan keterangan';
                         }
                         return null;
                       },
@@ -324,8 +332,9 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // FIX 3: Removed Unicode character
                     const Text(
-                      '🏫 Class Information',
+                      'Maklumat Kelas', 
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -336,7 +345,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                     DropdownButtonFormField<String>(
                       value: _selectedClassName,
                       decoration: InputDecoration(
-                        labelText: 'Class Name *',
+                        labelText: 'Nama Kelas *',
                         labelStyle: TextStyle(color: _subTextColor),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -362,7 +371,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                       },
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please select a class';
+                          return 'Sila pilih kelas';
                         }
                         return null;
                       },
@@ -390,8 +399,9 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // FIX 4: Removed Unicode character
                     const Text(
-                      '🏷️ Tags',
+                      'Tag', 
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -399,7 +409,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Add tags to help students find this material easily',
+                      'Tambah tag untuk membantu pelajar mencari bahan ini dengan mudah',
                       style: TextStyle(
                         fontSize: 14,
                       ),
@@ -411,7 +421,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                           child: TextFormField(
                             controller: _tagsController,
                             decoration: InputDecoration(
-                              hintText: 'e.g., homework, exam, notes, chapter-1',
+                              hintText: 'Cth., kerja rumah, peperiksaan, nota, bab-1',
                               hintStyle: TextStyle(color: _subTextColor.withOpacity(0.6)),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -437,7 +447,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                             ),
                             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
                           ),
-                          child: const Text('Add'),
+                          child: const Text('Tambah'),
                         ),
                       ],
                     ),
@@ -489,7 +499,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                         ),
                       )
                     : Text(
-                        widget.isEditing ? 'Update Material' : 'Upload Material',
+                        widget.isEditing ? 'Kemaskini Bahan' : 'Muat Naik Bahan',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
@@ -560,7 +570,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${file.extension?.toUpperCase() ?? 'FILE'} • ${sizeInMB} MB',
+                  '${file.extension?.toUpperCase() ?? 'FAIL'} • ${sizeInMB} MB',
                   style: TextStyle(
                     color: _subTextColor,
                   ),
@@ -596,7 +606,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Tap to select file',
+              'Sentuh untuk pilih fail',
               style: TextStyle(
                 fontSize: 16,
                 color: _primaryColor,
@@ -605,7 +615,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Supports: PDF, Images, Videos, Documents',
+              'Sokongan: PDF, Imej, Video, Dokumen',
               style: TextStyle(color: Colors.grey),
             ),
           ],
@@ -623,12 +633,12 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Material'),
-        content: Text('Are you sure you want to delete "${material.title}"?'),
+        title: const Text('Padam Bahan'),
+        content: Text('Anda pasti mahu padam "${material.title}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Batal'),
           ),
           TextButton(
             onPressed: () async {
@@ -638,7 +648,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
               if (success && mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: const Text('Material deleted successfully'),
+                    content: const Text('Bahan berjaya dipadam'),
                     backgroundColor: _primaryColor,
                   ),
                 );
@@ -646,7 +656,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
               }
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: const Text('Padam'),
           ),
         ],
       ),
