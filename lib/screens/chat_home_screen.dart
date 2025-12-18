@@ -5,7 +5,6 @@ import 'chat_screen.dart';
 import 'group_chat_screen.dart';
 
 class ChatHomeScreen extends StatefulWidget {
-  // Add these optional parameters
   final String? userType;
   final String? userId;
   final String? userName;
@@ -28,6 +27,7 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> with SingleTickerProvid
   List<Map<String, dynamic>> _groupChats = [];
   bool _loading = true;
   User? _currentUser;
+  Map<String, dynamic>? _userProfile;
 
   @override
   void initState() {
@@ -43,14 +43,22 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> with SingleTickerProvid
 
     _currentUser = _chatService.currentUser;
     
-    // Log the user info (remove in production)
-    print('Current user: ${_currentUser?.email}');
-    if (widget.userType != null) {
-      print('User type from params: ${widget.userType}');
+    if (_currentUser == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sila log masuk untuk menggunakan sembang')),
+        );
+        Navigator.of(context).pushReplacementNamed('/login');
+      });
+      return;
     }
-    if (widget.userName != null) {
-      print('User name from params: ${widget.userName}');
-    }
+
+    _userProfile = await _chatService.getCurrentUserProfile();
+    
+    print('=== PERMULAAN SEMBANG ===');
+    print('ID pengguna semasa: ${_currentUser?.id}');
+    print('E-mel pengguna semasa: ${_currentUser?.email}');
+    print('Profil pengguna: $_userProfile');
     
     await _loadChats();
 
@@ -60,13 +68,23 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> with SingleTickerProvid
   }
 
   Future<void> _loadChats() async {
-    final individual = await _chatService.getIndividualChats();
-    final groups = await _chatService.getGroupChats();
+    try {
+      final individual = await _chatService.getIndividualChats();
+      final groups = await _chatService.getGroupChats();
 
-    setState(() {
-      _individualChats = individual;
-      _groupChats = groups;
-    });
+      print('Dimuatkan ${individual.length} sembang individu');
+      print('Dimuatkan ${groups.length} sembang kumpulan');
+
+      setState(() {
+        _individualChats = individual;
+        _groupChats = groups;
+      });
+    } catch (e) {
+      print('Ralat memuatkan sembang: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ralat memuatkan sembang: $e')),
+      );
+    }
   }
 
   void _navigateToChat(Map<String, dynamic> chat) {
@@ -79,39 +97,74 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> with SingleTickerProvid
   }
 
   void _createNewIndividualChat() {
+    final emailController = TextEditingController();
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('New Chat'),
+        title: const Text('Sembang Baharu'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
+              controller: emailController,
               decoration: const InputDecoration(
-                labelText: 'Enter email address',
-                hintText: 'user@example.com',
+                labelText: 'Masukkan alamat e-mel',
+                hintText: 'pengguna@contoh.com',
+                border: OutlineInputBorder(),
               ),
-              onSubmitted: (email) async {
-                if (email.isNotEmpty) {
-                  Navigator.pop(context);
-                  final chat = await _chatService.createIndividualChat(email);
-                  if (chat != null) {
-                    _loadChats();
-                    _navigateToChat(chat);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Failed to create chat')),
-                    );
-                  }
-                }
-              },
+              keyboardType: TextInputType.emailAddress,
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final email = emailController.text.trim();
+              if (email.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Sila masukkan e-mel')),
+                );
+                return;
+              }
+
+              if (email == _currentUser?.email) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Tidak boleh sembang dengan diri sendiri')),
+                );
+                return;
+              }
+
+              Navigator.pop(context);
+              
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              );
+
+              final chat = await _chatService.createIndividualChat(email);
+              
+              Navigator.pop(context);
+
+              if (chat != null) {
+                await _loadChats();
+                _navigateToChat(chat);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Gagal mencipta sembang. Pengguna mungkin tidak wujud.'),
+                  ),
+                );
+              }
+            },
+            child: const Text('Cipta'),
           ),
         ],
       ),
@@ -128,8 +181,25 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> with SingleTickerProvid
   }
 
   String _getDisplayName() {
-    // Use provided userName, or current user's email, or default
-    return widget.userName ?? _currentUser?.email?.split('@').first ?? 'User';
+    if (_userProfile != null && _userProfile!['name'] != null) {
+      return _userProfile!['name'];
+    }
+    if (widget.userName != null && widget.userName!.isNotEmpty) {
+      return widget.userName!;
+    }
+    return _currentUser?.email?.split('@').first ?? 'Pengguna';
+  }
+
+  String _getUserType() {
+    if (_userProfile != null && _userProfile!['user_type'] != null) {
+      final type = _userProfile!['user_type'];
+      return type == 'student' ? 'Pelajar' : type == 'teacher' ? 'Guru' : 'Pengguna';
+    }
+    if (widget.userType != null) {
+      final type = widget.userType!.toLowerCase();
+      return type == 'student' ? 'Pelajar' : type == 'teacher' ? 'Guru' : widget.userType!;
+    }
+    return 'Pengguna';
   }
 
   @override
@@ -139,25 +209,25 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> with SingleTickerProvid
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${_getDisplayName()}\'s Chats'),
-            if (widget.userType != null)
-              Text(
-                '(${widget.userType})',
-                style: const TextStyle(fontSize: 12),
-              ),
+            Text('Sembang ${_getDisplayName()}'),
+            Text(
+              '(${_getUserType()})',
+              style: const TextStyle(fontSize: 12),
+            ),
           ],
         ),
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
-            Tab(text: 'Individual'),
-            Tab(text: 'Groups'),
+            Tab(text: 'Individu'),
+            Tab(text: 'Kumpulan'),
           ],
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadChats,
+            tooltip: 'Muat Semula',
           ),
         ],
       ),
@@ -166,91 +236,8 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> with SingleTickerProvid
           : TabBarView(
               controller: _tabController,
               children: [
-                // Individual Chats Tab
-                _individualChats.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.chat_bubble_outline,
-                              size: 80,
-                              color: Colors.grey,
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'No individual chats yet',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: _createNewIndividualChat,
-                              child: const Text('Start New Chat'),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: _individualChats.length,
-                        itemBuilder: (context, index) {
-                          final chat = _individualChats[index];
-                          return ListTile(
-                            leading: const CircleAvatar(
-                              child: Icon(Icons.person),
-                            ),
-                            title: Text(chat['name'] ?? 'Unnamed Chat'),
-                            subtitle: const Text('Tap to open chat'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () => _navigateToChat(chat),
-                          );
-                        },
-                      ),
-
-                // Group Chats Tab
-                _groupChats.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.group_outlined,
-                              size: 80,
-                              color: Colors.grey,
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'No group chats yet',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: _createNewGroupChat,
-                              child: const Text('Create Group'),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: _groupChats.length,
-                        itemBuilder: (context, index) {
-                          final chat = _groupChats[index];
-                          return ListTile(
-                            leading: const CircleAvatar(
-                              child: Icon(Icons.group),
-                            ),
-                            title: Text(chat['name'] ?? 'Unnamed Group'),
-                            subtitle: const Text('Group chat'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () => _navigateToChat(chat),
-                          );
-                        },
-                      ),
+                _buildIndividualChatsTab(),
+                _buildGroupChatsTab(),
               ],
             ),
       floatingActionButton: FloatingActionButton(
@@ -262,7 +249,110 @@ class _ChatHomeScreenState extends State<ChatHomeScreen> with SingleTickerProvid
           }
         },
         child: const Icon(Icons.add),
+        tooltip: _tabController.index == 0 ? 'Sembang Baharu' : 'Cipta Kumpulan',
       ),
+    );
+  }
+
+  Widget _buildIndividualChatsTab() {
+    if (_individualChats.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.chat_bubble_outline,
+              size: 80,
+              color: Colors.grey,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Tiada sembang individu lagi',
+              style: TextStyle(fontSize: 18, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _createNewIndividualChat,
+              icon: const Icon(Icons.add),
+              label: const Text('Mulakan Sembang Baharu'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: _individualChats.length,
+      itemBuilder: (context, index) {
+        final chat = _individualChats[index];
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Colors.blue.shade100,
+              child: const Icon(Icons.person, color: Colors.blue),
+            ),
+            title: Text(
+              chat['name'] ?? 'Sembang Tanpa Nama',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+            subtitle: const Text('Ketik untuk buka sembang'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _navigateToChat(chat),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGroupChatsTab() {
+    if (_groupChats.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.group_outlined,
+              size: 80,
+              color: Colors.grey,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Tiada sembang kumpulan lagi',
+              style: TextStyle(fontSize: 18, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: _createNewGroupChat,
+              icon: const Icon(Icons.group_add),
+              label: const Text('Cipta Kumpulan'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: _groupChats.length,
+      itemBuilder: (context, index) {
+        final chat = _groupChats[index];
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Colors.green.shade100,
+              child: const Icon(Icons.group, color: Colors.green),
+            ),
+            title: Text(
+              chat['name'] ?? 'Kumpulan Tanpa Nama',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+            subtitle: const Text('Sembang kumpulan'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _navigateToChat(chat),
+          ),
+        );
+      },
     );
   }
 

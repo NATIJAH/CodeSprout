@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-// Import your dashboards
+import 'register_screen.dart';
 import 'student_dashboard.dart';
 import 'teacher_dashboard.dart';
 
@@ -15,46 +14,34 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final email = TextEditingController();
   final password = TextEditingController();
-
   bool loading = false;
 
   Future<void> login() async {
     setState(() => loading = true);
 
     try {
-      final response = await Supabase.instance.client.auth.signInWithPassword(
-        email: email.text,
-        password: password.text,
+      final res = await Supabase.instance.client.auth.signInWithPassword(
+        email: email.text.trim(),
+        password: password.text.trim(),
       );
 
-      final user = response.user;
-      if (user == null) {
-        throw Exception("Login failed");
-      }
+      final userId = res.user?.id;
 
-      // Check student profile
-      final student = await Supabase.instance.client
-          .from('login_student')
-          .select()
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (student != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const StudentDashboard()),
-        );
+      if (userId == null) {
+        showError("Login failed");
+        setState(() => loading = false);
         return;
       }
 
-      // Check teacher profile
+      // --- CHECK TEACHER PROFILE ---
       final teacher = await Supabase.instance.client
-          .from('login_teacher')
-          .select()
-          .eq('id', user.id)
+          .from('profile_teacher')
+          .select('id')
+          .eq('id', userId)
           .maybeSingle();
 
       if (teacher != null) {
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const TeacherDashboard()),
@@ -62,95 +49,172 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Profile not found")),
-      );
+      // --- CHECK STUDENT PROFILE ---
+      final student = await Supabase.instance.client
+          .from('profile_student')
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
+
+      if (student != null) {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const StudentDashboard()),
+        );
+        return;
+      }
+
+      showError("No profile found for this user.");
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      showError(e.toString());
     }
 
     setState(() => loading = false);
   }
 
+  void showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xffdfeee7), // MATCHA LEMBUT
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                "🍃 Welcome Back!",
-                style: TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xff2c4a3f),
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                "Log in to continue",
-                style: TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 40),
-
-              // EMAIL FIELD
-              TextField(
-                controller: email,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  prefixIcon: const Icon(Icons.email),
-                  hintText: "Email",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 15),
-
-              // PASSWORD FIELD
-              TextField(
-                controller: password,
-                obscureText: true,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  prefixIcon: const Icon(Icons.lock),
-                  hintText: "Password",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 30),
-
-              // LOGIN BUTTON
-              ElevatedButton(
-                onPressed: loading ? null : login,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 80, vertical: 16),
-                  backgroundColor: const Color(0xff4f7f67),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                ),
-                child: loading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text(
-                  "Log In",
-                  style: TextStyle(fontSize: 18, color: Colors.white),
-                ),
-              ),
-            ],
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFE9F8EF), Color(0xFFDFF7E5)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            child: Container(
+              width: 500,
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(32),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 20,
+                    spreadRadius: 5,
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  const Text(
+                    "🌱 CodeSprout",
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF3F6B4D),
+                    ),
+                  ),
+
+                  const SizedBox(height: 30),
+
+                  _inputBox(
+                    child: TextField(
+                      controller: email,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.mail_outline),
+                        hintText: "Email",
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  _inputBox(
+                    child: TextField(
+                      controller: password,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.lock_outline),
+                        hintText: "Password",
+                        border: InputBorder.none,
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 26),
+
+                  _greenButton(
+                    text: loading ? "Please wait..." : "Log In",
+                    onPressed: loading ? null : login,
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text("Don't have an account? "),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const RegisterScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text(
+                          "Sign up",
+                          style: TextStyle(
+                            color: Color(0xFF4F8E64),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _inputBox({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3FAF4),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _greenButton({required String text, required VoidCallback? onPressed}) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF8BD7A2),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(fontSize: 18),
         ),
       ),
     );
