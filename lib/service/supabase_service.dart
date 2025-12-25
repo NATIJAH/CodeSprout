@@ -1,3 +1,5 @@
+// student/lib/service/supabase_service.dart
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseService {
@@ -11,9 +13,9 @@ class SupabaseService {
       );
       client = Supabase.instance.client;
       
-      print('✅ Supabase initialized successfully for Student!');
+      print('✅ Supabase berjaya dimulakan untuk Pelajar!');
     } catch (e) {
-      print('❌ Supabase initialization failed: $e');
+      print('❌ Gagal memulakan Supabase: $e');
     }
   }
 }
