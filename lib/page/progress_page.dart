@@ -1,3 +1,5 @@
+// student/lib/page/progress_page.dart
+
 import 'package:flutter/material.dart';
 import '../service/supabase_service.dart';
 import '../theme/color.dart';
@@ -22,14 +24,14 @@ class _ProgressPageState extends State<ProgressPage> {
       final user = SupabaseService.client.auth.currentUser;
       if (user == null) return;
 
-      // Get MCQ attempts
+      // Dapatkan percubaan MCQ
       final mcqResponse = await SupabaseService.client
           .from('student_mcq_attempts')
           .select('*, mcq_set!inner(title)')
           .eq('student_id', user.id)
           .order('submitted_at', ascending: false);
 
-      // Get PDF progress
+      // Dapatkan kemajuan PDF
       final pdfResponse = await SupabaseService.client
           .from('student_pdf_progress')
           .select('*, teacher_pdf!inner(title)')
@@ -37,13 +39,13 @@ class _ProgressPageState extends State<ProgressPage> {
           .eq('viewed', true)
           .order('last_viewed', ascending: false);
 
-      // Get total PDFs count - FIXED THIS LINE
+      // Dapatkan jumlah PDF - TELAH DIPERBETULKAN
       final totalPdfsResponse = await SupabaseService.client
           .from('teacher_pdf')
           .select()
           .then((response) => response.length);
 
-      // Calculate statistics
+      // Kira statistik
       int totalMcqAttempts = mcqResponse.length;
       
       int totalCorrect = 0;
@@ -60,7 +62,7 @@ class _ProgressPageState extends State<ProgressPage> {
       double avgScore = totalQuestions > 0 ? (totalCorrect / totalQuestions * 100) : 0;
 
       int viewedPdfs = pdfResponse.length;
-      int totalPdfs = totalPdfsResponse; // Already an int now
+      int totalPdfs = totalPdfsResponse; // Sudah menjadi int
       double pdfCompletion = totalPdfs > 0 ? (viewedPdfs / totalPdfs * 100) : 0;
 
       setState(() {
@@ -80,7 +82,7 @@ class _ProgressPageState extends State<ProgressPage> {
         _isLoading = false;
       });
     } catch (e) {
-      print('Error loading progress: $e');
+      print('Ralat memuat kemajuan: $e');
       setState(() => _isLoading = false);
     }
   }
@@ -89,6 +91,7 @@ class _ProgressPageState extends State<ProgressPage> {
     final stats = _progressData['stats'] ?? {};
     return Card(
       elevation: 2,
+      color: AppColor.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -97,7 +100,7 @@ class _ProgressPageState extends State<ProgressPage> {
         child: Column(
           children: [
             Text(
-              'Overall Performance',
+              'Prestasi Keseluruhan',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -108,19 +111,19 @@ class _ProgressPageState extends State<ProgressPage> {
             Row(
               children: [
                 _buildStatItem(
-                  'MCQ Tests',
+                  'Ujian MCQ',
                   '${stats['total_attempts'] ?? 0}',
                   Icons.quiz,
-                  AppColor.primaryBlue,
+                  AppColor.success, // ✅ TUKAR KE HIJAU
                 ),
                 _buildStatItem(
-                  'Avg Score',
+                  'Purata Markah',
                   '${(stats['avg_score'] ?? 0).toStringAsFixed(1)}%',
                   Icons.assessment,
-                  AppColor.success,
+                  AppColor.success, // ✅ TUKAR KE HIJAU
                 ),
                 _buildStatItem(
-                  'Materials Read',
+                  'Bahan Dibaca',
                   '${stats['viewed_pdfs'] ?? 0}/${stats['total_pdfs'] ?? 0}',
                   Icons.book,
                   AppColor.warning,
@@ -205,6 +208,7 @@ class _ProgressPageState extends State<ProgressPage> {
     final attempts = _progressData['mcq_attempts'] ?? [];
     if (attempts.isEmpty) {
       return Card(
+        color: AppColor.card,
         child: Padding(
           padding: EdgeInsets.all(20),
           child: Center(
@@ -213,7 +217,7 @@ class _ProgressPageState extends State<ProgressPage> {
                 Icon(Icons.history, size: 50, color: Colors.grey),
                 SizedBox(height: 10),
                 Text(
-                  'No test attempts yet',
+                  'Tiada percubaan ujian lagi',
                   style: TextStyle(color: Colors.grey),
                 ),
               ],
@@ -225,6 +229,7 @@ class _ProgressPageState extends State<ProgressPage> {
 
     return Card(
       elevation: 2,
+      color: AppColor.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -234,7 +239,7 @@ class _ProgressPageState extends State<ProgressPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Recent Test Attempts',
+              'Percubaan Ujian Terkini',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -286,7 +291,7 @@ class _ProgressPageState extends State<ProgressPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  mcqSet['title'] ?? 'Unknown Test',
+                  mcqSet['title'] ?? 'Ujian Tidak Dikenali',
                   style: TextStyle(
                     fontWeight: FontWeight.w500,
                     color: AppColor.textDark,
@@ -294,7 +299,7 @@ class _ProgressPageState extends State<ProgressPage> {
                 ),
                 SizedBox(height: 4),
                 Text(
-                  'Score: $score/$total',
+                  'Markah: $score/$total',
                   style: TextStyle(
                     fontSize: 12,
                     color: AppColor.textLight,
@@ -332,6 +337,7 @@ class _ProgressPageState extends State<ProgressPage> {
     final pdfProgress = _progressData['pdf_progress'] ?? [];
     if (pdfProgress.isEmpty) {
       return Card(
+        color: AppColor.card,
         child: Padding(
           padding: EdgeInsets.all(20),
           child: Center(
@@ -340,7 +346,7 @@ class _ProgressPageState extends State<ProgressPage> {
                 Icon(Icons.history_toggle_off, size: 50, color: Colors.grey),
                 SizedBox(height: 10),
                 Text(
-                  'No recent activity',
+                  'Tiada aktiviti terkini',
                   style: TextStyle(color: Colors.grey),
                 ),
               ],
@@ -352,6 +358,7 @@ class _ProgressPageState extends State<ProgressPage> {
 
     return Card(
       elevation: 2,
+      color: AppColor.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -361,7 +368,7 @@ class _ProgressPageState extends State<ProgressPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Recently Viewed Materials',
+              'Bahan Dilihat Terkini',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -398,11 +405,11 @@ class _ProgressPageState extends State<ProgressPage> {
           ),
         ),
         title: Text(
-          pdf['title'] ?? 'Unknown Material',
+          pdf['title'] ?? 'Bahan Tidak Dikenali',
           style: TextStyle(fontSize: 14),
         ),
         subtitle: Text(
-          'Viewed ${_timeAgo(lastViewed)}',
+          'Dilihat ${_timeAgo(lastViewed)}',
           style: TextStyle(fontSize: 12, color: AppColor.textLight),
         ),
         trailing: Icon(Icons.check_circle, color: AppColor.success, size: 16),
@@ -425,15 +432,15 @@ class _ProgressPageState extends State<ProgressPage> {
     final difference = now.difference(date);
 
     if (difference.inDays > 30) {
-      return '${(difference.inDays / 30).floor()} months ago';
+      return '${(difference.inDays / 30).floor()} bulan lepas';
     } else if (difference.inDays > 0) {
-      return '${difference.inDays} days ago';
+      return '${difference.inDays} hari lepas';
     } else if (difference.inHours > 0) {
-      return '${difference.inHours} hours ago';
+      return '${difference.inHours} jam lepas';
     } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes} minutes ago';
+      return '${difference.inMinutes} minit lepas';
     } else {
-      return 'Just now';
+      return 'Baru sahaja';
     }
   }
 
@@ -442,33 +449,40 @@ class _ProgressPageState extends State<ProgressPage> {
     return Scaffold(
       backgroundColor: AppColor.background,
       appBar: AppBar(
-        title: Text('My Progress'),
+        title: Text('Kemajuan Saya'),
+        backgroundColor: AppColor.success, // ✅ TUKAR KE HIJAU
+        foregroundColor: Colors.white,
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildStatsCard(),
-                  SizedBox(height: 20),
-                  _buildProgressChart(
-                    'MCQ Performance',
-                    (_progressData['stats']?['avg_score'] ?? 0).toDouble(),
-                    AppColor.primaryBlue,
-                  ),
-                  SizedBox(height: 16),
-                  _buildProgressChart(
-                    'Materials Completion',
-                    (_progressData['stats']?['pdf_completion'] ?? 0).toDouble(),
-                    AppColor.success,
-                  ),
-                  SizedBox(height: 24),
-                  _buildMcqHistory(),
-                  SizedBox(height: 20),
-                  _buildRecentActivity(),
-                ],
+          ? Center(child: CircularProgressIndicator(color: AppColor.success)) // ✅ HIJAU
+          : RefreshIndicator(
+              onRefresh: _loadProgress,
+              color: AppColor.success, // ✅ HIJAU
+              child: SingleChildScrollView(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildStatsCard(),
+                    SizedBox(height: 20),
+                    _buildProgressChart(
+                      'Prestasi MCQ',
+                      (_progressData['stats']?['avg_score'] ?? 0).toDouble(),
+                      AppColor.success, // ✅ TUKAR KE HIJAU
+                    ),
+                    SizedBox(height: 16),
+                    _buildProgressChart(
+                      'Kemajuan Bahan',
+                      (_progressData['stats']?['pdf_completion'] ?? 0).toDouble(),
+                      AppColor.success, // ✅ TUKAR KE HIJAU
+                    ),
+                    SizedBox(height: 24),
+                    _buildMcqHistory(),
+                    SizedBox(height: 20),
+                    _buildRecentActivity(),
+                    SizedBox(height: 20),
+                  ],
+                ),
               ),
             ),
     );
