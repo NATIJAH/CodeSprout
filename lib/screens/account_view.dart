@@ -53,7 +53,6 @@ class _AccountViewState extends State<AccountView> {
           'auth_email': user.email,
           'account_type': 'Student',
           'status': 'Aktif',
-          'two_factor_enabled': false,
           'email_notifications': true,
           'sms_notifications': false,
           'language': 'English',
@@ -425,18 +424,6 @@ class _AccountViewState extends State<AccountView> {
             _buildSection(
               "Keselamatan & Privasi",
               [
-                _switchTile(
-                  "Pengesahan Dua Faktor",
-                  accountData!['two_factor_enabled'] ?? false,
-                  Icons.security_outlined,
-                  (value) async {
-                    await supabase.from('account_settings').upsert({
-                      'user_id': user?.id,
-                      'two_factor_enabled': value,
-                    });
-                    fetchAccountData();
-                  },
-                ),
                 _infoTile("Tahap privasi", accountData!['privacy_level'] ?? 'Public', Icons.privacy_tip_outlined),
                 _actionTile("Tukar kata laluan", Icons.lock_outline, changePassword),
               ],
@@ -493,7 +480,7 @@ class _AccountViewState extends State<AccountView> {
                         Icon(Icons.warning_amber_rounded, color: dangerColor),
                         const SizedBox(width: 12),
                         const Text(
-                          "",
+                          "Zon Bahaya",
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
