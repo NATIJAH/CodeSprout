@@ -12,11 +12,49 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
   final email = TextEditingController();
   final password = TextEditingController();
   bool loading = false;
+  bool obscurePassword = true;
+
+  @override
+  void dispose() {
+    email.dispose();
+    password.dispose();
+    super.dispose();
+  }
+
+  // Email validation
+  String? validateEmail(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Email is required';
+    }
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
+      return 'Enter a valid email';
+    }
+    return null;
+  }
+
+  // Password validation
+  String? validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Password is required';
+    }
+    if (value.length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+    return null;
+  }
 
   Future<void> login() async {
+    // Validate form
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (loading) return;
+
     setState(() => loading = true);
 
     try {
@@ -66,11 +104,21 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       showError("No profile found for this user.");
+    } on AuthException catch (e) {
+      if (e.message.contains('Invalid login credentials')) {
+        showError('Invalid email or password');
+      } else if (e.message.contains('Email not confirmed')) {
+        showError('Please verify your email before signing in');
+      } else {
+        showError(e.message);
+      }
     } catch (e) {
       showError(e.toString());
     }
 
-    setState(() => loading = false);
+    if (mounted) {
+      setState(() => loading = false);
+    }
   }
 
   void showError(String msg) {
@@ -109,77 +157,106 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
-              child: Column(
-                children: [
-                  const Text(
-                    "🌱 CodeSprout",
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF3F6B4D),
-                    ),
-                  ),
-
-                  const SizedBox(height: 30),
-
-                  _inputBox(
-                    child: TextField(
-                      controller: email,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.mail_outline),
-                        hintText: "Email",
-                        border: InputBorder.none,
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    const Text(
+                      "🌱 CodeSprout",
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF3F6B4D),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 10),
 
-                  _inputBox(
-                    child: TextField(
-                      controller: password,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.lock_outline),
-                        hintText: "Password",
-                        border: InputBorder.none,
+                    const Text(
+                      "Welcome Back!",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Color(0xFF6B8E77),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: 26),
+                    const SizedBox(height: 30),
 
-                  _greenButton(
-                    text: loading ? "Please wait..." : "Log In",
-                    onPressed: loading ? null : login,
-                  ),
+                    // Email Field
+                    _inputBox(
+                      child: TextFormField(
+                        controller: email,
+                        validator: validateEmail,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.mail_outline),
+                          hintText: "Email",
+                          border: InputBorder.none,
+                        ),
+                      ),
+                    ),
 
-                  const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text("Don't have an account? "),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const RegisterScreen(),
+                    // Password Field
+                    _inputBox(
+                      child: TextFormField(
+                        controller: password,
+                        validator: validatePassword,
+                        obscureText: obscurePassword,
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          hintText: "Password",
+                          border: InputBorder.none,
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.grey,
                             ),
-                          );
-                        },
-                        child: const Text(
-                          "Sign up",
-                          style: TextStyle(
-                            color: Color(0xFF4F8E64),
-                            fontWeight: FontWeight.bold,
+                            onPressed: () {
+                              setState(() => obscurePassword = !obscurePassword);
+                            },
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+
+                    const SizedBox(height: 26),
+
+                    _greenButton(
+                      text: loading ? "Please wait..." : "Log In",
+                      onPressed: loading ? null : login,
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text("Don't have an account? "),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const RegisterScreen(),
+                              ),
+                            );
+                          },
+                          child: const Text(
+                            "Sign up",
+                            style: TextStyle(
+                              color: Color(0xFF4F8E64),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
