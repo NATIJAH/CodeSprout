@@ -40,6 +40,11 @@ dependencies:
   http: ^0.13.6
   image_picker: ^1.0.4
   cached_network_image: ^3.3.0
+  table_calendar: ^3.0.9
+  flutter_slidable: ^2.0.0
+  fl_chart: ^1.1.1
+  pdf: ^3.11.0
+  printing: ^5.11.0
 
 
   # The following adds the Cupertino Icons font to your application.
@@ -98,3 +103,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
+
+
+  assets:
+    - assets/logo.png        # Path untuk logo kau
+    - assets/                # Atau letak semua assets folder
+

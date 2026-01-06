@@ -1,154 +1,191 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-// Screens
-import 'screens/chat_home_screen.dart';
-import 'screens/open_student_chat.dart';
-import 'screens/open_teacher_chat.dart';
+import 'screens/login_screen.dart';
 import 'screens/student_dashboard.dart';
 import 'screens/teacher_dashboard.dart';
-import 'screens/login_screen.dart';
+import 'providers/materials_provider.dart';
+import 'services/supabase_service.dart';
+
+const String TEACHER_INVITE_CODE = "SPROUT2025";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize Supabase
+
+  // FIXED: Changed from SupabaseClient.initialize to Supabase.initialize
   await Supabase.initialize(
-    url: 'https://fyvfocfbxrdaoyecbfzm.supabase.co', // Replace with your Supabase URL
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5dmZvY2ZieHJkYW95ZWNiZnptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4MzAxMzEsImV4cCI6MjA3OTQwNjEzMX0.R-Gtwp0Xmg9KUWGn6zV0G7xxYVX0QiWvTCfq3-MwpU4', // Replace with your Supabase anon key
+    url: 'https://fyvfocfbxrdaoyecbfzm.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ5dmZvY2ZieHJkYW95ZWNiZnptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM4MzAxMzEsImV4cCI6MjA3OTQwNjEzMX0.R-Gtwp0Xmg9KUWGn6zV0G7xxYVX0QiWvTCfq3-MwpU4',
   );
-  
-  runApp(const MyApp());
+
+  runApp(const SproutApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class SproutApp extends StatefulWidget {
+  const SproutApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'School Communication App',
-      theme: ThemeData(
-        primarySwatch: Colors.green,
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF128C7E), // WhatsApp green
-          foregroundColor: Colors.white,
-          elevation: 1,
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: Color(0xFF128C7E),
-          foregroundColor: Colors.white,
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.grey[100],
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(25),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 12,
-          ),
-        ),
-      ),
-      debugShowCheckedModeBanner: false,
-      home: const AuthWrapper(),
-      // Update your routes in main.dart:
-routes: {
-  '/login': (context) => const LoginScreen(),
-  '/student-dashboard': (context) => StudentDashboard(
-        userId: Supabase.instance.client.auth.currentUser?.id ?? '',
-        onSignOut: () {
-          Supabase.instance.client.auth.signOut();
-          Navigator.pushReplacementNamed(context, '/login');
-        },
-      ),
-  '/teacher-dashboard': (context) => TeacherDashboard(
-        userId: Supabase.instance.client.auth.currentUser?.id ?? '',
-        onSignOut: () {
-          Supabase.instance.client.auth.signOut();
-          Navigator.pushReplacementNamed(context, '/login');
-        },
-      ),
-  '/student-chat': (context) => const OpenStudentChat(),
-  '/teacher-chat': (context) => const OpenTeacherChat(),
-},
-    );
-  }
+  State<SproutApp> createState() => _SproutAppState();
 }
 
-class AuthWrapper extends StatefulWidget {
-  const AuthWrapper({super.key});
-
-  @override
-  State<AuthWrapper> createState() => _AuthWrapperState();
-}
-
-class _AuthWrapperState extends State<AuthWrapper> {
-  final supabase = Supabase.instance.client;
-  User? _user;
-  String? _userType;
+class _SproutAppState extends State<SproutApp> {
+  final _supabase = Supabase.instance.client;
+  late Stream<AuthState> _authStateStream;
   bool _isLoading = true;
+  Session? _currentSession;
 
   @override
   void initState() {
     super.initState();
-    _checkAuth();
-    // Listen for auth state changes
-    supabase.auth.onAuthStateChange.listen((AuthState data) {
-      _checkAuth();
-    });
+    
+    // Get initial session immediately
+    _currentSession = _supabase.auth.currentSession;
+    _isLoading = false;
+    
+    // Set up auth state stream for real-time updates
+    _authStateStream = _supabase.auth.onAuthStateChange;
   }
 
-  Future<void> _checkAuth() async {
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 20),
+                Text('Loading...'),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => MaterialsProvider()),
+        // Add other providers here if you have them
+      ],
+      child: MaterialApp(
+        title: 'Sprout App',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF9ED2A1),
+          ),
+          scaffoldBackgroundColor: const Color(0xFFF4FDF5),
+          useMaterial3: true,
+        ),
+        debugShowCheckedModeBanner: false,
+        home: StreamBuilder<AuthState>(
+          stream: _authStateStream,
+          builder: (context, snapshot) {
+            // Use the stream for real-time auth changes
+            if (snapshot.hasData) {
+              final session = snapshot.data?.session;
+              
+              if (session != null) {
+                return AuthLoadingScreen(session: session);
+              } else {
+                return const LoginScreen();
+              }
+            }
+            
+            // If stream hasn't emitted yet, use the current session
+            if (_currentSession != null) {
+              return AuthLoadingScreen(session: _currentSession!);
+            }
+            
+            return const LoginScreen();
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class AuthLoadingScreen extends StatefulWidget {
+  final Session session;
+  
+  const AuthLoadingScreen({super.key, required this.session});
+
+  @override
+  State<AuthLoadingScreen> createState() => _AuthLoadingScreenState();
+}
+
+class _AuthLoadingScreenState extends State<AuthLoadingScreen> {
+  final _supabase = Supabase.instance.client;
+  bool _isChecking = true;
+  bool _isTeacher = false;
+  bool _isStudent = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkUserType();
+  }
+
+  Future<void> _checkUserType() async {
+    final userId = widget.session.user.id;
+    
     try {
-      final session = supabase.auth.currentSession;
-      final user = supabase.auth.currentUser;
-      
-      if (session != null && user != null) {
-        // Determine user type by checking which profile table has the user
-        final studentProfile = await supabase
-            .from('profile_student')
-            .select('id')
-            .eq('id', user.id)
-            .maybeSingle();
+      // Check teacher first
+      final teacherResponse = await _supabase
+          .from('profile_teacher')
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
 
-        final teacherProfile = await supabase
-            .from('profile_teacher')
-            .select('id')
-            .eq('id', user.id)
-            .maybeSingle();
-
+      if (teacherResponse != null) {
         setState(() {
-          _user = user;
-          _userType = studentProfile != null ? 'student' : 
-                     teacherProfile != null ? 'teacher' : null;
-          _isLoading = false;
+          _isTeacher = true;
+          _isChecking = false;
         });
-      } else {
-        setState(() {
-          _user = null;
-          _userType = null;
-          _isLoading = false;
-        });
+        return;
       }
-    } catch (e) {
-      print('Error checking auth: $e');
+
+      // Check student
+      final studentResponse = await _supabase
+          .from('profile_student')
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
+
+      if (studentResponse != null) {
+        setState(() {
+          _isStudent = true;
+          _isChecking = false;
+        });
+        return;
+      }
+
+      // No profile found
       setState(() {
-        _isLoading = false;
+        _errorMessage = 'No profile found for this user';
+        _isChecking = false;
+      });
+      
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error checking user type: $e';
+        _isChecking = false;
       });
     }
   }
 
-  Future<void> _signOut() async {
+  Future<void> _logoutAndRedirect() async {
     try {
-      await supabase.auth.signOut();
-      setState(() {
-        _user = null;
-        _userType = null;
-      });
+      await _supabase.auth.signOut();
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+      }
     } catch (e) {
       print('Error signing out: $e');
     }
@@ -156,142 +193,52 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (_isChecking) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 20),
+              Text('Checking user profile...'),
+            ],
+          ),
         ),
       );
     }
 
-    if (_user == null || _userType == null) {
-      return const LoginScreen();
+    if (_errorMessage != null) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 64, color: Colors.red),
+              SizedBox(height: 20),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.red),
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _logoutAndRedirect,
+                child: const Text('Return to Login'),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
-    // Redirect based on user type
-    return _userType == 'student'
-        ? StudentDashboard(
-            userId: _user!.id,
-            onSignOut: _signOut,
-          )
-        : TeacherDashboard(
-            userId: _user!.id,
-            onSignOut: _signOut,
-          );
-  }
-}
+    if (_isTeacher) {
+      return const TeacherDashboard();
+    } else if (_isStudent) {
+      return const StudentDashboard();
+    }
 
-// Update StudentDashboard and TeacherDashboard to accept parameters
-class StudentDashboard extends StatelessWidget {
-  final String userId;
-  final VoidCallback onSignOut;
-  
-  const StudentDashboard({
-    super.key,
-    required this.userId,
-    required this.onSignOut,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Student Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.chat),
-            onPressed: () {
-              Navigator.pushNamed(context, '/student-chat');
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: onSignOut,
-          ),
-        ],
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Welcome Student!',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pushNamed(context, '/student-chat');
-              },
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.chat),
-                  SizedBox(width: 8),
-                  Text('Open Chat'),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class TeacherDashboard extends StatelessWidget {
-  final String userId;
-  final VoidCallback onSignOut;
-  
-  const TeacherDashboard({
-    super.key,
-    required this.userId,
-    required this.onSignOut,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Teacher Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.chat),
-            onPressed: () {
-              Navigator.pushNamed(context, '/teacher-chat');
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: onSignOut,
-          ),
-        ],
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Welcome Teacher!',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pushNamed(context, '/teacher-chat');
-              },
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.chat),
-                  SizedBox(width: 8),
-                  Text('Open Chat'),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    // Fallback - should not reach here
+    return const LoginScreen();
   }
 }

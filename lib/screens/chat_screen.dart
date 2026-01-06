@@ -1,12 +1,18 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/chat_service.dart';
-import '../widgets/chat_bubble.dart';
+import '../models/chat_models.dart';
 
 class ChatScreen extends StatefulWidget {
-  final Map<String, dynamic> chatData;
+  final String conversationId;
+  final String otherUserId;
+  final String otherUserName;
 
-  const ChatScreen({Key? key, required this.chatData}) : super(key: key);
+  const ChatScreen({
+    super.key,
+    required this.conversationId,
+    required this.otherUserId,
+    required this.otherUserName,
+  });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -16,178 +22,368 @@ class _ChatScreenState extends State<ChatScreen> {
   final ChatService _chatService = ChatService();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  List<Map<String, dynamic>> _messages = [];
-  bool _loading = true;
-  Timer? _refreshTimer;
+
+  // Matcha Green Color Palette
+  static const Color matchaGreen = Color(0xFF87A96B);
+  static const Color matchaLight = Color(0xFFC8D5B9);
+  static const Color matchaDark = Color(0xFF5F7A4E);
+  static const Color bgLight = Color(0xFFF8FAF6);
 
   @override
   void initState() {
     super.initState();
-    _loadMessages();
-    _startAutoRefresh();
+    _markMessagesAsRead();
   }
 
-  Future<void> _loadMessages() async {
-    setState(() {
-      _loading = true;
-    });
-
-    final messages = await _chatService.getMessagesWithSender(widget.chatData['id']);
-    
-    setState(() {
-      _messages = messages;
-      _loading = false;
-    });
-
-    // Scroll to bottom
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-      }
-    });
-  }
-
-  void _startAutoRefresh() {
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      _loadMessages();
-    });
+  Future<void> _markMessagesAsRead() async {
+    final currentUserId = _chatService.currentUserId;
+    if (currentUserId != null) {
+      await _chatService.markMessagesAsRead(widget.conversationId, currentUserId);
+    }
   }
 
   Future<void> _sendMessage() async {
     final message = _messageController.text.trim();
     if (message.isEmpty) return;
 
-    final success = await _chatService.sendMessage(widget.chatData['id'], message);
-    
-    if (success) {
+    try {
+      await _chatService.sendMessage(widget.conversationId, message);
       _messageController.clear();
-      _loadMessages();
+
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menghantar mesej: $e'),
+          backgroundColor: Colors.red[400],
+        ),
+      );
     }
   }
 
-  String _getChatName() {
-    final chat = widget.chatData;
-    if (chat['is_group'] == true) {
-      return chat['name'] ?? 'Group Chat';
+  String _formatMessageTime(DateTime time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _getDateSeparator(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final messageDate = DateTime(date.year, date.month, date.day);
+
+    if (messageDate == today) {
+      return 'Hari Ini';
+    } else if (messageDate == yesterday) {
+      return 'Semalam';
+    } else if (now.difference(date).inDays < 7) {
+      const days = ['Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu', 'Ahad'];
+      return days[date.weekday - 1];
     } else {
-      final currentUserEmail = _chatService.currentUser?.email ?? '';
-      final chatName = chat['name'] ?? '';
-      final parts = chatName.split(' & ');
-      if (parts.length == 2) {
-        return parts[0] == currentUserEmail ? parts[1] : parts[0];
-      }
-      return chatName;
+      return '${date.day}/${date.month}/${date.year}';
     }
   }
 
-  String _getSenderName(Map<String, dynamic> message) {
-    // Get sender info from enriched message
-    if (message['sender'] != null) {
-      final sender = message['sender'];
-      if (sender['name'] != null && sender['name'].toString().isNotEmpty) {
-        return sender['name'].toString();
+  Widget _buildDateSeparator(DateTime date) {
+    return Center(
+      child: Container(
+        margin: EdgeInsets.symmetric(vertical: 16),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        decoration: BoxDecoration(
+          color: matchaLight.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          _getDateSeparator(date),
+          style: TextStyle(
+            fontSize: 12,
+            color: matchaDark,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildMessagesWithDateSeparators(List<ChatMessage> messages) {
+    List<Widget> widgets = [];
+    DateTime? lastDate;
+
+    for (int i = 0; i < messages.length; i++) {
+      final message = messages[i];
+      final messageDate = DateTime(
+        message.createdAt.year,
+        message.createdAt.month,
+        message.createdAt.day,
+      );
+
+      if (lastDate == null || messageDate != lastDate) {
+        widgets.add(_buildDateSeparator(message.createdAt));
+        lastDate = messageDate;
       }
-      if (sender['email'] != null) {
-        return sender['email'].toString().split('@').first;
-      }
+
+      final isMe = message.senderId == _chatService.currentUserId;
+
+      widgets.add(
+        Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            margin: EdgeInsets.only(bottom: 8),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.75,
+            ),
+            decoration: BoxDecoration(
+              color: isMe ? matchaGreen : Colors.white,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+                bottomLeft: Radius.circular(isMe ? 16 : 4),
+                bottomRight: Radius.circular(isMe ? 4 : 16),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 5,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  message.message,
+                  style: TextStyle(
+                    color: isMe ? Colors.white : Colors.black87,
+                    fontSize: 15,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  _formatMessageTime(message.createdAt),
+                  style: TextStyle(
+                    color: isMe ? Colors.white.withOpacity(0.8) : Colors.grey[600],
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
-    
-    // Fallback
-    return 'User ${message['user_id'].toString().substring(0, 8)}';
+
+    return widgets;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: bgLight,
       appBar: AppBar(
-        title: Text(_getChatName()),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadMessages,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _messages.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.chat, size: 64, color: Colors.grey),
-                            SizedBox(height: 16),
-                            Text(
-                              'No messages yet',
-                              style: TextStyle(fontSize: 18, color: Colors.grey),
-                            ),
-                            Text(
-                              'Start the conversation!',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(8.0),
-                        itemCount: _messages.length,
-                        itemBuilder: (context, index) {
-                          final message = _messages[index];
-                          final isMe = message['user_id'] == _chatService.currentUser?.id;
-                          
-                          return ChatBubble(
-                            message: message['content'],
-                            isMe: isMe,
-                            senderName: _getSenderName(message),
-                            timestamp: DateTime.parse(message['created_at']),
-                          );
-                        },
-                      ),
-          ),
-          _buildMessageInput(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageInput() {
-    return Container(
-      padding: const EdgeInsets.all(8.0),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade300)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _messageController,
-              decoration: InputDecoration(
-                hintText: 'Type a message...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(25.0),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 12.0,
+        elevation: 0,
+        backgroundColor: Colors.white,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: matchaDark),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: matchaGreen,
+              radius: 20,
+              child: Text(
+                widget.otherUserName[0].toUpperCase(),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              onSubmitted: (_) => _sendMessage(),
             ),
-          ),
-          const SizedBox(width: 8.0),
-          CircleAvatar(
-            backgroundColor: Theme.of(context).primaryColor,
-            child: IconButton(
-              icon: const Icon(Icons.send, color: Colors.white),
-              onPressed: _sendMessage,
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                widget.otherUserName,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: matchaDark,
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
+      ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          bool isWideScreen = constraints.maxWidth > 800;
+          
+          return Center(
+            child: Container(
+              constraints: BoxConstraints(maxWidth: 900),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: StreamBuilder<List<ChatMessage>>(
+                      stream: _chatService.getMessages(widget.conversationId),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Text('Ralat: ${snapshot.error}'),
+                          );
+                        }
+
+                        if (!snapshot.hasData) {
+                          return Center(
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(matchaGreen),
+                            ),
+                          );
+                        }
+
+                        final messages = snapshot.data!;
+
+                        if (messages.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.all(32),
+                                  decoration: BoxDecoration(
+                                    color: matchaLight.withOpacity(0.3),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.chat_bubble_outline,
+                                    size: 80,
+                                    color: matchaGreen,
+                                  ),
+                                ),
+                                SizedBox(height: 24),
+                                Text(
+                                  'Tiada mesej lagi',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: matchaDark,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Mulakan perbualan!',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (_scrollController.hasClients) {
+                            _scrollController.animateTo(
+                              _scrollController.position.maxScrollExtent,
+                              duration: Duration(milliseconds: 300),
+                              curve: Curves.easeOut,
+                            );
+                          }
+                          _markMessagesAsRead();
+                        });
+
+                        return ListView(
+                          controller: _scrollController,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isWideScreen ? 32 : 16,
+                            vertical: 16,
+                          ),
+                          children: _buildMessagesWithDateSeparators(messages),
+                        );
+                      },
+                    ),
+                  ),
+                  Container(
+                    padding: EdgeInsets.all(isWideScreen ? 20 : 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: bgLight,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: TextField(
+                              controller: _messageController,
+                              decoration: InputDecoration(
+                                hintText: 'Taip mesej...',
+                                hintStyle: TextStyle(color: Colors.grey[500]),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: BorderSide.none,
+                                ),
+                                filled: true,
+                                fillColor: bgLight,
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 12,
+                                ),
+                              ),
+                              maxLines: null,
+                              textCapitalization: TextCapitalization.sentences,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [matchaGreen, matchaDark],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: matchaGreen.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: IconButton(
+                            icon: Icon(Icons.send, color: Colors.white),
+                            onPressed: _sendMessage,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -196,7 +392,6 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
-    _refreshTimer?.cancel();
     super.dispose();
   }
 }
