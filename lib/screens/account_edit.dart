@@ -301,346 +301,334 @@ class _UpdateAccountSettingsPageState extends State<UpdateAccountSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(24),
         ),
-        title: Row(
+        child: Column(
           children: [
+            // Header
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: accentColor.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(Icons.edit, color: primaryColor, size: 20),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                "Edit Tetapan",
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                  fontSize: 18,
+                color: Colors.white,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
                 ),
-                overflow: TextOverflow.ellipsis,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: accentColor.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.edit, color: primaryColor, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      "Edit Tetapan",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.black87),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+
+            // Content
+            Expanded(
+              child: isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(color: primaryColor),
+                    )
+                  : Form(
+                      key: _formKey,
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Info banner
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.blue[50],
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.blue[200]!, width: 1),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: Colors.blue[700], size: 20),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      "Untuk mengubah nama, telefon atau gambar, gunakan Edit Profile.",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.blue[900],
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+
+                            // Bio Field
+                            _buildCompactInputField(
+                              controller: bioController,
+                              label: "Bio",
+                              hint: "Tulis tentang diri anda (10-500 aksara)",
+                              icon: Icons.article_outlined,
+                              maxLines: 3,
+                              validator: validateBio,
+                              counterText: '${bioController.text.length}/500',
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Date of Birth Selector
+                            GestureDetector(
+                              onTap: _selectDate,
+                              child: Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: validateDateOfBirth() != null 
+                                        ? dangerColor 
+                                        : Colors.grey[300]!,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.cake_outlined, color: primaryColor, size: 20),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            "Tarikh Lahir",
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            selectedDate != null
+                                                ? "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}"
+                                                : "Pilih tarikh (min. 13 tahun)",
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: selectedDate != null 
+                                                  ? Colors.black87 
+                                                  : Colors.grey[400],
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Icon(Icons.calendar_today, color: Colors.grey[400], size: 18),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Gender Selector
+                            _buildCompactDropdownField(
+                              label: "Jantina",
+                              icon: Icons.wc_outlined,
+                              value: selectedGender,
+                              items: const ['Lelaki', 'Perempuan', 'Lain-lain'],
+                              hint: "Pilih jantina",
+                              onChanged: (value) => setState(() => selectedGender = value),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // City Field
+                            _buildCompactInputField(
+                              controller: cityController,
+                              label: "Bandar",
+                              hint: "Contoh: Kuala Lumpur",
+                              icon: Icons.location_city_outlined,
+                              validator: validateCity,
+                              counterText: '${cityController.text.length}/50',
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Country Field
+                            _buildCompactInputField(
+                              controller: countryController,
+                              label: "Negara",
+                              hint: "Contoh: Malaysia",
+                              icon: Icons.flag_outlined,
+                              validator: validateCountry,
+                              counterText: '${countryController.text.length}/50',
+                            ),
+                            const SizedBox(height: 20),
+
+                            // Validation Guide
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.amber[50],
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.amber[200]!, width: 1),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.lightbulb_outline, color: Colors.amber[700], size: 16),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        "Panduan",
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.amber[900],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _compactValidationPoint("Bio: 10-500 aksara"),
+                                  _compactValidationPoint("Umur: Min. 13 tahun"),
+                                  _compactValidationPoint("Lokasi: 2-50 aksara, huruf sahaja"),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+            ),
+
+            // Footer Buttons
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(24),
+                  bottomRight: Radius.circular(24),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 5,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: isSaving ? null : () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: primaryColor,
+                        side: BorderSide(color: primaryColor, width: 2),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text(
+                        "Batal",
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: isSaving ? null : saveData,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey[300],
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        elevation: 0,
+                      ),
+                      child: isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Text(
+                              "Simpan",
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
       ),
-      body: isLoading
-          ? Center(
-              child: CircularProgressIndicator(color: primaryColor),
-            )
-          : Form(
-              key: _formKey,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Info banner
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.blue[200]!, width: 1),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.info_outline, color: Colors.blue[700], size: 24),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              "Untuk mengubah nama, telefon atau gambar profil, sila gunakan halaman Edit Profile.",
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.blue[900],
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Personal Information Section
-                    _buildSectionHeader(
-                      icon: Icons.person_outline,
-                      title: "Maklumat Peribadi",
-                    ),
-                    const SizedBox(height: 16),
-
-                    _buildModernInputField(
-                      controller: bioController,
-                      label: "Bio",
-                      hint: "Tulis sesuatu tentang diri anda (min. 10 aksara)",
-                      icon: Icons.article_outlined,
-                      maxLines: 4,
-                      validator: validateBio,
-                      counterText: '${bioController.text.length}/500',
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Date of Birth Selector
-                    GestureDetector(
-                      onTap: _selectDate,
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: validateDateOfBirth() != null 
-                                ? dangerColor 
-                                : Colors.transparent,
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: accentColor.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(
-                                Icons.cake_outlined,
-                                color: primaryColor,
-                                size: 20,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "Tarikh Lahir",
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey[600],
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    selectedDate != null
-                                        ? "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}"
-                                        : "Pilih tarikh lahir (min. umur 13 tahun)",
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      color: selectedDate != null 
-                                          ? Colors.black87 
-                                          : Colors.grey[400],
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(Icons.calendar_today, color: Colors.grey[400], size: 20),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Gender Selector
-                    _buildDropdownField(
-                      label: "Jantina",
-                      icon: Icons.wc_outlined,
-                      value: selectedGender,
-                      items: const ['Lelaki', 'Perempuan', 'Lain-lain'],
-                      hint: "Pilih jantina",
-                      onChanged: (value) => setState(() => selectedGender = value),
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    // Location Section
-                    _buildSectionHeader(
-                      icon: Icons.location_on_outlined,
-                      title: "Lokasi",
-                    ),
-                    const SizedBox(height: 16),
-
-                    _buildModernInputField(
-                      controller: cityController,
-                      label: "Bandar",
-                      hint: "Contoh: Kuala Lumpur (min. 2 aksara)",
-                      icon: Icons.location_city_outlined,
-                      validator: validateCity,
-                      counterText: '${cityController.text.length}/50',
-                    ),
-                    const SizedBox(height: 16),
-
-                    _buildModernInputField(
-                      controller: countryController,
-                      label: "Negara",
-                      hint: "Contoh: Malaysia (min. 2 aksara)",
-                      icon: Icons.flag_outlined,
-                      validator: validateCountry,
-                      counterText: '${countryController.text.length}/50',
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    // Validation Info
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.amber[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.amber[200]!, width: 1),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.lightbulb_outline, color: Colors.amber[700], size: 20),
-                              const SizedBox(width: 8),
-                              Text(
-                                "Panduan Pengisian",
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.amber[900],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          _validationPoint("Bio: 10-500 aksara (opsional)"),
-                          _validationPoint("Tarikh lahir: Min. umur 13 tahun (opsional)"),
-                          _validationPoint("Bandar/Negara: 2-50 aksara, huruf sahaja (opsional)"),
-                          _validationPoint("Jantina: Pilih dari senarai (opsional)"),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 40),
-
-                    // Save Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: isSaving ? null : saveData,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          foregroundColor: Colors.white,
-                          disabledBackgroundColor: Colors.grey[300],
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          elevation: 0,
-                        ),
-                        child: isSaving
-                            ? Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  const Text(
-                                    "Menyimpan...",
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  Icon(Icons.check_circle_outline, size: 22),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    "Simpan Perubahan",
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Cancel Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: primaryColor,
-                          side: BorderSide(color: primaryColor, width: 2),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text(
-                          "Batal",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 40),
-                  ],
-                ),
-              ),
-            ),
     );
   }
 
-  Widget _validationPoint(String text) {
+  Widget _compactValidationPoint(String text) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.check_circle, color: Colors.amber[700], size: 16),
-          const SizedBox(width: 8),
+          Icon(Icons.check_circle, color: Colors.amber[700], size: 14),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
               text,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 color: Colors.amber[900],
-                height: 1.4,
+                height: 1.3,
               ),
             ),
           ),
@@ -649,112 +637,61 @@ class _UpdateAccountSettingsPageState extends State<UpdateAccountSettingsPage> {
     );
   }
 
-  Widget _buildSectionHeader({required IconData icon, required String title}) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: accentColor.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: primaryColor, size: 22),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildModernInputField({
+  Widget _buildCompactInputField({
     required TextEditingController controller,
     required String label,
     required String hint,
     required IconData icon,
     int maxLines = 1,
-    TextInputType? keyboardType,
-    bool required = false,
     String? Function(String?)? validator,
     String? counterText,
   }) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[300]!, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, color: primaryColor, size: 18),
-                ),
-                const SizedBox(width: 12),
+                Icon(icon, color: primaryColor, size: 16),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     label,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: Colors.grey[700],
                     ),
                   ),
                 ),
-                if (required) ...[
-                  const SizedBox(width: 4),
-                  const Text(
-                    '*',
-                    style: TextStyle(color: Colors.red, fontSize: 16),
-                  ),
-                ],
-                if (counterText != null) ...[
-                  const SizedBox(width: 8),
+                if (counterText != null)
                   Text(
                     counterText,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 10,
                       color: Colors.grey[500],
                     ),
                   ),
-                ],
               ],
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
             child: TextFormField(
               controller: controller,
               maxLines: maxLines,
-              keyboardType: keyboardType,
               validator: validator,
               autovalidateMode: AutovalidateMode.onUserInteraction,
-              onChanged: (value) {
-                setState(() {}); // Update counter
-              },
+              onChanged: (value) => setState(() {}),
               style: const TextStyle(
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: Colors.black87,
               ),
@@ -769,7 +706,7 @@ class _UpdateAccountSettingsPageState extends State<UpdateAccountSettingsPage> {
                 contentPadding: EdgeInsets.zero,
                 errorStyle: TextStyle(
                   color: dangerColor,
-                  fontSize: 12,
+                  fontSize: 11,
                 ),
               ),
             ),
@@ -779,7 +716,7 @@ class _UpdateAccountSettingsPageState extends State<UpdateAccountSettingsPage> {
     );
   }
 
-  Widget _buildDropdownField({
+  Widget _buildCompactDropdownField({
     required String label,
     required IconData icon,
     required String? value,
@@ -790,68 +727,50 @@ class _UpdateAccountSettingsPageState extends State<UpdateAccountSettingsPage> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[300]!, width: 1),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, color: primaryColor, size: 18),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[700],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: DropdownButtonFormField<String>(
-              value: value,
-              hint: hint != null ? Text(hint) : null,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-              ),
-              style: const TextStyle(
-                fontSize: 15,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Row(
+          children: [
+            Icon(icon, color: primaryColor, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: Colors.black87,
+                color: Colors.grey[700],
               ),
-              icon: Icon(Icons.arrow_drop_down, color: primaryColor),
-              items: items.map((String item) {
-                return DropdownMenuItem<String>(
-                  value: item,
-                  child: Text(item),
-                );
-              }).toList(),
-              onChanged: onChanged,
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                value: value,
+                hint: hint != null ? Text(hint, style: const TextStyle(fontSize: 14)) : null,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+                icon: Icon(Icons.arrow_drop_down, color: primaryColor, size: 20),
+                items: items.map((String item) {
+                  return DropdownMenuItem<String>(
+                    value: item,
+                    child: Text(item),
+                  );
+                }).toList(),
+                onChanged: onChanged,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
