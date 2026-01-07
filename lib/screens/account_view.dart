@@ -29,8 +29,116 @@ class _AccountViewState extends State<AccountView> {
     fetchAccountData();
   }
 
+  // ============ DATA VALIDATION HELPERS ============
+
+  /// Validates if a string is a valid email format
+  bool _isValidEmail(String? email) {
+    if (email == null || email.isEmpty) return false;
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    );
+    return emailRegex.hasMatch(email);
+  }
+
+  /// Validates password strength
+  String? _validatePassword(String? password) {
+    if (password == null || password.isEmpty) {
+      return 'Kata laluan diperlukan';
+    }
+    if (password.length < 8) {
+      return 'Kata laluan mesti sekurang-kurangnya 8 aksara';
+    }
+    if (!password.contains(RegExp(r'[A-Z]'))) {
+      return 'Kata laluan mesti mengandungi huruf besar';
+    }
+    if (!password.contains(RegExp(r'[a-z]'))) {
+      return 'Kata laluan mesti mengandungi huruf kecil';
+    }
+    if (!password.contains(RegExp(r'[0-9]'))) {
+      return 'Kata laluan mesti mengandungi nombor';
+    }
+    if (!password.contains(RegExp(r'[@$!%*?&]'))) {
+      return 'Kata laluan mesti mengandungi aksara khas (@\$!%*?&)';
+    }
+    return null;
+  }
+
+  /// Sanitizes user input to prevent XSS and injection
+  String _sanitizeInput(String? input) {
+    if (input == null) return '';
+    return input
+        .trim()
+        .replaceAll(RegExp(r'<[^>]*>'), '') // Remove HTML tags
+        .replaceAll(RegExp(r'[^\w\s@.,!?-]'), ''); // Allow safe characters
+  }
+
+  /// Validates account data before displaying
+  Map<String, dynamic> _validateAccountData(Map<String, dynamic>? data) {
+    if (data == null) return {};
+
+    return {
+      'user_id': data['user_id'],
+      'bio': data['bio']?.toString().trim() ?? '',
+      'date_of_birth': data['date_of_birth']?.toString().trim() ?? '',
+      'gender': data['gender']?.toString().trim() ?? '',
+      'country': data['country']?.toString().trim() ?? '',
+      'city': data['city']?.toString().trim() ?? '',
+      'email_notifications': data['email_notifications'] == true,
+      'push_notifications': data['push_notifications'] == true,
+      'sms_notifications': data['sms_notifications'] == true,
+      'two_factor_enabled': data['two_factor_enabled'] == true,
+    };
+  }
+
+  /// Validates profile data before displaying
+  Map<String, dynamic> _validateProfileData(Map<String, dynamic>? data) {
+    if (data == null) return {};
+
+    return {
+      'id': data['id'],
+      'full_name': data['full_name']?.toString().trim() ?? '',
+      'email': _isValidEmail(data['email']?.toString())
+          ? data['email']
+          : 'Invalid Email',
+      'phone': data['phone']?.toString().trim() ?? '',
+      'avatar_url': data['avatar_url']?.toString().isNotEmpty == true
+          ? data['avatar_url']
+          : null,
+    };
+  }
+
+  /// Validates date string
+  bool _isValidDate(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return false;
+    try {
+      final date = DateTime.parse(dateStr);
+      final now = DateTime.now();
+      
+      // Date should not be in the future
+      if (date.isAfter(now)) return false;
+      
+      // Date should not be unreasonably old (e.g., before 1900)
+      if (date.year < 1900) return false;
+      
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Validates delete confirmation input
+  bool _validateDeleteConfirmation(String input) {
+    return input.trim().toUpperCase() == "PADAM";
+  }
+
+  // ============ DATA FETCHING WITH VALIDATION ============
+
   Future<void> fetchAccountData() async {
-    setState(() => loading = true);
+    setState(() {
+      loading = true;
+      errorMsg = null;
+    });
+
     try {
       final user = supabase.auth.currentUser;
       if (user == null) {
@@ -39,6 +147,11 @@ class _AccountViewState extends State<AccountView> {
           errorMsg = "Tiada pengguna log masuk";
         });
         return;
+      }
+
+      // Validate user ID
+      if (user.id.isEmpty) {
+        throw Exception('Invalid user ID');
       }
 
       // Fetch from account_settings table
@@ -55,8 +168,9 @@ class _AccountViewState extends State<AccountView> {
           .eq("id", user.id)
           .maybeSingle();
 
-      setState(() {
-        accountData = accountSettings ?? {
+      // Validate and sanitize data
+      final validatedAccount = _validateAccountData(
+        accountSettings ?? {
           'user_id': user.id,
           'bio': '',
           'date_of_birth': '',
@@ -67,130 +181,273 @@ class _AccountViewState extends State<AccountView> {
           'push_notifications': true,
           'sms_notifications': false,
           'two_factor_enabled': false,
-        };
-        
-        profileData = profile;
+        },
+      );
+
+      final validatedProfile = _validateProfileData(profile);
+
+      setState(() {
+        accountData = validatedAccount;
+        profileData = validatedProfile;
         loading = false;
         errorMsg = null;
       });
     } catch (e) {
+      debugPrint('Account fetch error: $e');
       setState(() {
         loading = false;
-        errorMsg = "Error loading account: $e";
+        errorMsg = "Error loading account: ${e.toString()}";
       });
     }
   }
 
+  // ============ DELETE ACCOUNT WITH VALIDATION ============
+
   Future<void> showDeleteAccountDialog() async {
     final confirmController = TextEditingController();
-    
+    final emailController = TextEditingController();
+    final _deleteFormKey = GlobalKey<FormState>();
+    bool isDeleting = false;
+
     return showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.warning_rounded, color: dangerColor, size: 32),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                "Padam Akaun",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Icon(Icons.warning_rounded, color: dangerColor, size: 32),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  "Padam Akaun",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                ),
               ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.red[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: dangerColor.withOpacity(0.3)),
-              ),
+            ],
+          ),
+          content: Form(
+            key: _deleteFormKey,
+            child: SingleChildScrollView(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Tindakan ini TIDAK DAPAT DIBALIKKAN:",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: dangerColor.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Tindakan ini TIDAK DAPAT DIBALIKKAN:",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dangerPoint("Padamkan semua data profil anda"),
+                        _dangerPoint("Alih keluar semua entri dan siaran blog"),
+                        _dangerPoint("Padamkan rancangan pembelajaran dan gred"),
+                        _dangerPoint("Tutup akaun anda secara kekal"),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  _dangerPoint("Padamkan semua data profil anda"),
-                  _dangerPoint("Alih keluar semua entri dan siaran blog"),
-                  _dangerPoint("Padamkan rancangan pembelajaran dan gred"),
-                  _dangerPoint("Tutup akaun anda secara kekal"),
+                  const SizedBox(height: 20),
+                  
+                  // Email verification
+                  const Text(
+                    'Sahkan email anda:',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      hintText: supabase.auth.currentUser?.email ?? "Email anda",
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      prefixIcon: Icon(Icons.email_outlined, color: dangerColor),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: dangerColor),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: dangerColor, width: 2),
+                      ),
+                      errorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.red, width: 2),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Email diperlukan';
+                      }
+                      if (!_isValidEmail(value)) {
+                        return 'Format email tidak sah';
+                      }
+                      if (value.trim().toLowerCase() != 
+                          supabase.auth.currentUser?.email?.toLowerCase()) {
+                        return 'Email tidak sepadan dengan akaun anda';
+                      }
+                      return null;
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+                  
+                  const Text(
+                    'Taip "PADAM" untuk mengesahkan:',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: confirmController,
+                    decoration: InputDecoration(
+                      hintText: "PADAM",
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      prefixIcon: Icon(Icons.warning_outlined, color: dangerColor),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: dangerColor),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: dangerColor, width: 2),
+                      ),
+                      errorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.red, width: 2),
+                      ),
+                      counterText: '${confirmController.text.length}/5',
+                    ),
+                    maxLength: 5,
+                    textCapitalization: TextCapitalization.characters,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Sila masukkan pengesahan';
+                      }
+                      if (!_validateDeleteConfirmation(value)) {
+                        return 'Mesti taip "PADAM" dengan huruf besar';
+                      }
+                      return null;
+                    },
+                    onChanged: (value) {
+                      setDialogState(() {}); // Update counter
+                    },
+                  ),
+
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.orange[300]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline, 
+                          color: Colors.orange[900], 
+                          size: 20
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Data akan dipadamkan dalam masa 5 saat selepas pengesahan',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange[900],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-            const Text(
-              'Taip "PADAM" untuk mengesahkan:',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isDeleting ? null : () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: const Text("Batal", style: TextStyle(fontSize: 16)),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: confirmController,
-              decoration: InputDecoration(
-                hintText: "PADAM",
-                filled: true,
-                fillColor: Colors.grey[100],
-                border: OutlineInputBorder(
+            ElevatedButton(
+              onPressed: isDeleting
+                  ? null
+                  : () async {
+                      // Validate form
+                      if (_deleteFormKey.currentState?.validate() != true) {
+                        return;
+                      }
+
+                      // Additional confirmation
+                      final shouldDelete = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Pengesahan Akhir'),
+                          content: const Text(
+                            'Adakah anda benar-benar pasti mahu memadam akaun ini? '
+                            'Tindakan ini tidak boleh dibalikkan.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('Tidak'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: dangerColor,
+                              ),
+                              child: const Text('Ya, Padam'),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (shouldDelete != true) return;
+
+                      setDialogState(() => isDeleting = true);
+                      
+                      Navigator.pop(context);
+                      await deleteAccount();
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: dangerColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: dangerColor),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: dangerColor, width: 2),
                 ),
               ),
+              child: isDeleting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text("Padam Akaun", style: TextStyle(fontSize: 16)),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
-            child: const Text("Batal", style: TextStyle(fontSize: 16)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (confirmController.text.trim().toUpperCase() == "PADAM") {
-                Navigator.pop(context);
-                await deleteAccount();
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Sila taip "PADAM" untuk mengesahkan'),
-                    backgroundColor: dangerColor,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: dangerColor,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text("Padam Akaun", style: TextStyle(fontSize: 16)),
-          ),
-        ],
       ),
     );
   }
@@ -217,44 +474,141 @@ class _AccountViewState extends State<AccountView> {
   Future<void> deleteAccount() async {
     try {
       final user = supabase.auth.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        throw Exception('Tiada pengguna log masuk');
+      }
+
+      // Validate user ID
+      if (user.id.isEmpty) {
+        throw Exception('User ID tidak sah');
+      }
 
       // Show loading dialog
       if (!mounted) return;
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => Center(
-          child: Container(
-            padding: const EdgeInsets.all(30),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: primaryColor),
-                const SizedBox(height: 20),
-                const Text(
-                  'Memadam akaun...',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-              ],
+        builder: (context) => WillPopScope(
+          onWillPop: () async => false,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.all(30),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: primaryColor),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Memadam akaun...',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Sila tunggu...',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       );
 
-      // Delete all related data
-      await supabase.from('blog_entries').delete().eq('student_id', user.id);
-      await supabase.from('forum_posts').delete().eq('student_id', user.id);
-      await supabase.from('forum_discussions').delete().eq('student_id', user.id);
-      await supabase.from('learning_plans').delete().eq('student_id', user.id);
-      await supabase.from('browser_sessions').delete().eq('student_id', user.id);
-      await supabase.from('grades').delete().eq('student_id', user.id);
-      await supabase.from('profile_student').delete().eq('id', user.id);
-      await supabase.from('account_settings').delete().eq('user_id', user.id);
+      // Count records to delete (for validation)
+      int deletedRecords = 0;
+
+      // Delete all related data with validation
+      try {
+        final blogEntries = await supabase
+            .from('blog_entries')
+            .delete()
+            .eq('student_id', user.id)
+            .select();
+        deletedRecords += (blogEntries as List?)?.length ?? 0;
+      } catch (e) {
+        debugPrint('Error deleting blog entries: $e');
+      }
+
+      try {
+        final forumPosts = await supabase
+            .from('forum_posts')
+            .delete()
+            .eq('student_id', user.id)
+            .select();
+        deletedRecords += (forumPosts as List?)?.length ?? 0;
+      } catch (e) {
+        debugPrint('Error deleting forum posts: $e');
+      }
+
+      try {
+        final forumDiscussions = await supabase
+            .from('forum_discussions')
+            .delete()
+            .eq('student_id', user.id)
+            .select();
+        deletedRecords += (forumDiscussions as List?)?.length ?? 0;
+      } catch (e) {
+        debugPrint('Error deleting forum discussions: $e');
+      }
+
+      try {
+        final learningPlans = await supabase
+            .from('learning_plans')
+            .delete()
+            .eq('student_id', user.id)
+            .select();
+        deletedRecords += (learningPlans as List?)?.length ?? 0;
+      } catch (e) {
+        debugPrint('Error deleting learning plans: $e');
+      }
+
+      try {
+        final browserSessions = await supabase
+            .from('browser_sessions')
+            .delete()
+            .eq('student_id', user.id)
+            .select();
+        deletedRecords += (browserSessions as List?)?.length ?? 0;
+      } catch (e) {
+        debugPrint('Error deleting browser sessions: $e');
+      }
+
+      try {
+        final grades = await supabase
+            .from('grades')
+            .delete()
+            .eq('student_id', user.id)
+            .select();
+        deletedRecords += (grades as List?)?.length ?? 0;
+      } catch (e) {
+        debugPrint('Error deleting grades: $e');
+      }
+
+      try {
+        await supabase
+            .from('profile_student')
+            .delete()
+            .eq('id', user.id);
+        deletedRecords++;
+      } catch (e) {
+        debugPrint('Error deleting profile: $e');
+      }
+
+      try {
+        await supabase
+            .from('account_settings')
+            .delete()
+            .eq('user_id', user.id);
+        deletedRecords++;
+      } catch (e) {
+        debugPrint('Error deleting account settings: $e');
+      }
+
+      debugPrint('Total records deleted: $deletedRecords');
 
       // Sign out
       await supabase.auth.signOut();
@@ -265,37 +619,53 @@ class _AccountViewState extends State<AccountView> {
       // Navigate to login
       Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
 
+      // Show success message
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Akaun berjaya dipadamkan ($deletedRecords rekod)'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          );
+        }
+      });
+    } catch (e) {
+      debugPrint('Delete account error: $e');
+      
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Close loading dialog
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Akaun berjaya dipadamkan'),
-          backgroundColor: Colors.green,
+          content: Text('Ralat memadam akaun: ${e.toString()}'),
+          backgroundColor: dangerColor,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.of(context).pop(); // Close loading dialog
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ralat memadam akaun: $e'),
-          backgroundColor: dangerColor,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+          action: SnackBarAction(
+            label: 'Cuba Lagi',
+            textColor: Colors.white,
+            onPressed: () => showDeleteAccountDialog(),
           ),
         ),
       );
     }
   }
 
+  // ============ PASSWORD CHANGE WITH VALIDATION ============
+
   Future<void> changePassword() async {
     final currentPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
     final confirmPasswordController = TextEditingController();
+    final _passwordFormKey = GlobalKey<FormState>();
     bool obscureCurrent = true;
     bool obscureNew = true;
     bool obscureConfirm = true;
@@ -322,145 +692,145 @@ class _AccountViewState extends State<AccountView> {
               ),
             ],
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: currentPasswordController,
-                  obscureText: obscureCurrent,
-                  decoration: InputDecoration(
-                    labelText: "Kata laluan semasa",
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    prefixIcon: Icon(Icons.lock, color: primaryColor),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        obscureCurrent ? Icons.visibility_off : Icons.visibility,
-                        color: Colors.grey,
+          content: Form(
+            key: _passwordFormKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: currentPasswordController,
+                    obscureText: obscureCurrent,
+                    decoration: InputDecoration(
+                      labelText: "Kata laluan semasa",
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
                       ),
-                      onPressed: () => setDialogState(() => obscureCurrent = !obscureCurrent),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: newPasswordController,
-                  obscureText: obscureNew,
-                  decoration: InputDecoration(
-                    labelText: "Kata laluan baru",
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    prefixIcon: Icon(Icons.lock_outline, color: primaryColor),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        obscureNew ? Icons.visibility_off : Icons.visibility,
-                        color: Colors.grey,
-                      ),
-                      onPressed: () => setDialogState(() => obscureNew = !obscureNew),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Kata laluan mesti mengandungi:',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blue[900],
+                      prefixIcon: Icon(Icons.lock, color: primaryColor),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscureCurrent
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: Colors.grey,
                         ),
+                        onPressed: () => setDialogState(
+                            () => obscureCurrent = !obscureCurrent),
                       ),
-                      const SizedBox(height: 6),
-                      _passwordRequirement('Min 8 aksara'),
-                      _passwordRequirement('Huruf besar'),
-                      _passwordRequirement('Huruf kecil'),
-                      _passwordRequirement('Nombor'),
-                      _passwordRequirement('Aksara khas (@\$!%*?&)'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: confirmPasswordController,
-                  obscureText: obscureConfirm,
-                  decoration: InputDecoration(
-                    labelText: "Sahkan kata laluan",
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
                     ),
-                    prefixIcon: Icon(Icons.check_circle_outline, color: primaryColor),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        obscureConfirm ? Icons.visibility_off : Icons.visibility,
-                        color: Colors.grey,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Kata laluan semasa diperlukan';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: newPasswordController,
+                    obscureText: obscureNew,
+                    decoration: InputDecoration(
+                      labelText: "Kata laluan baru",
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
                       ),
-                      onPressed: () => setDialogState(() => obscureConfirm = !obscureConfirm),
+                      prefixIcon: Icon(Icons.lock_outline, color: primaryColor),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscureNew ? Icons.visibility_off : Icons.visibility,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () =>
+                            setDialogState(() => obscureNew = !obscureNew),
+                      ),
+                    ),
+                    validator: _validatePassword,
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Kata laluan mesti mengandungi:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue[900],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        _passwordRequirement('Min 8 aksara'),
+                        _passwordRequirement('Huruf besar'),
+                        _passwordRequirement('Huruf kecil'),
+                        _passwordRequirement('Nombor'),
+                        _passwordRequirement('Aksara khas (@\$!%*?&)'),
+                      ],
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: confirmPasswordController,
+                    obscureText: obscureConfirm,
+                    decoration: InputDecoration(
+                      labelText: "Sahkan kata laluan",
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      prefixIcon:
+                          Icon(Icons.check_circle_outline, color: primaryColor),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          obscureConfirm
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () => setDialogState(
+                            () => obscureConfirm = !obscureConfirm),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Sila sahkan kata laluan baru';
+                      }
+                      if (value != newPasswordController.text) {
+                        return 'Kata laluan tidak sepadan';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
               style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
               child: const Text("Batal", style: TextStyle(fontSize: 16)),
             ),
             ElevatedButton(
               onPressed: () async {
-                // Validate passwords match
-                if (newPasswordController.text != confirmPasswordController.text) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Kata laluan tidak sepadan'),
-                      backgroundColor: dangerColor,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  );
-                  return;
-                }
-
-                // Validate password strength
-                final regex = RegExp(
-                  r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$',
-                );
-                if (!regex.hasMatch(newPasswordController.text)) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Kata laluan tidak memenuhi syarat'),
-                      backgroundColor: dangerColor,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  );
+                // Validate form
+                if (_passwordFormKey.currentState?.validate() != true) {
                   return;
                 }
 
@@ -482,10 +852,11 @@ class _AccountViewState extends State<AccountView> {
                     ),
                   );
                 } catch (e) {
+                  debugPrint('Password change error: $e');
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Ralat: $e'),
+                      content: Text('Ralat: ${e.toString()}'),
                       backgroundColor: dangerColor,
                       behavior: SnackBarBehavior.floating,
                       shape: RoundedRectangleBorder(
@@ -498,7 +869,8 @@ class _AccountViewState extends State<AccountView> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryColor,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -527,6 +899,8 @@ class _AccountViewState extends State<AccountView> {
     );
   }
 
+  // ============ UI BUILD ============
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
@@ -550,6 +924,15 @@ class _AccountViewState extends State<AccountView> {
               Text(
                 errorMsg!,
                 style: TextStyle(color: dangerColor, fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: fetchAccountData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                ),
+                child: const Text('Cuba Semula'),
               ),
             ],
           ),
@@ -560,13 +943,35 @@ class _AccountViewState extends State<AccountView> {
     if (accountData == null) {
       return Scaffold(
         backgroundColor: backgroundColor,
-        body: const Center(child: Text("Tiada data akaun")),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.account_circle_outlined,
+                  size: 64, color: Colors.grey),
+              const SizedBox(height: 20),
+              const Text("Tiada data akaun"),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: fetchAccountData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                ),
+                child: const Text('Muat Semula'),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     final user = supabase.auth.currentUser;
-    final username = profileData?['full_name'] ?? user?.email?.split('@')[0] ?? 'User';
-    final phone = profileData?['phone'] ?? '-';
+    final username = profileData?['full_name']?.isNotEmpty == true
+        ? profileData!['full_name']
+        : user?.email?.split('@')[0] ?? 'User';
+    final phone = profileData?['phone']?.isNotEmpty == true
+        ? profileData!['phone']
+        : '-';
     final imageUrl = profileData?['avatar_url'];
 
     return Scaffold(
@@ -602,7 +1007,8 @@ class _AccountViewState extends State<AccountView> {
                         child: CircleAvatar(
                           radius: 45,
                           backgroundColor: Colors.white,
-                          backgroundImage: imageUrl != null && imageUrl.isNotEmpty
+                          backgroundImage: imageUrl != null &&
+                                  imageUrl.isNotEmpty
                               ? NetworkImage(imageUrl)
                               : null,
                           child: imageUrl == null || imageUrl.isEmpty
@@ -628,7 +1034,8 @@ class _AccountViewState extends State<AccountView> {
                       ),
                       const SizedBox(height: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.white.withOpacity(0.3),
                           borderRadius: BorderRadius.circular(12),
@@ -667,7 +1074,8 @@ class _AccountViewState extends State<AccountView> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline, color: Colors.blue[700], size: 24),
+                        Icon(Icons.info_outline,
+                            color: Colors.blue[700], size: 24),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
@@ -711,7 +1119,8 @@ class _AccountViewState extends State<AccountView> {
                     ),
                   ],
                   trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.grey[200],
                       borderRadius: BorderRadius.circular(8),
@@ -719,7 +1128,8 @@ class _AccountViewState extends State<AccountView> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.lock_outline, size: 14, color: Colors.grey[700]),
+                        Icon(Icons.lock_outline,
+                            size: 14, color: Colors.grey[700]),
                         const SizedBox(width: 4),
                         Text(
                           "Tetap",
@@ -749,7 +1159,7 @@ class _AccountViewState extends State<AccountView> {
                     _modernInfoTile(
                       icon: Icons.cake_outlined,
                       label: "Tarikh Lahir",
-                      value: accountData!['date_of_birth'] != null
+                      value: _isValidDate(accountData!['date_of_birth'])
                           ? _formatDate(accountData!['date_of_birth'])
                           : 'Belum ditetapkan',
                     ),
@@ -812,11 +1222,23 @@ class _AccountViewState extends State<AccountView> {
                       label: "Pengesahan Dua Faktor",
                       value: accountData!['two_factor_enabled'] ?? false,
                       onChanged: (value) async {
-                        await supabase.from('account_settings').upsert({
-                          'user_id': user?.id,
-                          'two_factor_enabled': value,
-                        });
-                        fetchAccountData();
+                        try {
+                          await supabase.from('account_settings').upsert({
+                            'user_id': user?.id,
+                            'two_factor_enabled': value,
+                          });
+                          await fetchAccountData();
+                        } catch (e) {
+                          debugPrint('2FA toggle error: $e');
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Ralat: ${e.toString()}'),
+                                backgroundColor: dangerColor,
+                              ),
+                            );
+                          }
+                        }
                       },
                     ),
                   ],
@@ -832,11 +1254,15 @@ class _AccountViewState extends State<AccountView> {
                       label: "Pemberitahuan Email",
                       value: accountData!['email_notifications'] ?? true,
                       onChanged: (value) async {
-                        await supabase.from('account_settings').upsert({
-                          'user_id': user?.id,
-                          'email_notifications': value,
-                        });
-                        fetchAccountData();
+                        try {
+                          await supabase.from('account_settings').upsert({
+                            'user_id': user?.id,
+                            'email_notifications': value,
+                          });
+                          await fetchAccountData();
+                        } catch (e) {
+                          debugPrint('Email notification toggle error: $e');
+                        }
                       },
                     ),
                     _modernSwitchTile(
@@ -844,11 +1270,15 @@ class _AccountViewState extends State<AccountView> {
                       label: "Pemberitahuan Push",
                       value: accountData!['push_notifications'] ?? true,
                       onChanged: (value) async {
-                        await supabase.from('account_settings').upsert({
-                          'user_id': user?.id,
-                          'push_notifications': value,
-                        });
-                        fetchAccountData();
+                        try {
+                          await supabase.from('account_settings').upsert({
+                            'user_id': user?.id,
+                            'push_notifications': value,
+                          });
+                          await fetchAccountData();
+                        } catch (e) {
+                          debugPrint('Push notification toggle error: $e');
+                        }
                       },
                     ),
                     _modernSwitchTile(
@@ -856,11 +1286,15 @@ class _AccountViewState extends State<AccountView> {
                       label: "Pemberitahuan SMS",
                       value: accountData!['sms_notifications'] ?? false,
                       onChanged: (value) async {
-                        await supabase.from('account_settings').upsert({
-                          'user_id': user?.id,
-                          'sms_notifications': value,
-                        });
-                        fetchAccountData();
+                        try {
+                          await supabase.from('account_settings').upsert({
+                            'user_id': user?.id,
+                            'sms_notifications': value,
+                          });
+                          await fetchAccountData();
+                        } catch (e) {
+                          debugPrint('SMS notification toggle error: $e');
+                        }
                       },
                     ),
                   ],
@@ -880,7 +1314,8 @@ class _AccountViewState extends State<AccountView> {
                         ],
                       ),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: dangerColor.withOpacity(0.3), width: 2),
+                      border: Border.all(
+                          color: dangerColor.withOpacity(0.3), width: 2),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(20),
@@ -937,7 +1372,8 @@ class _AccountViewState extends State<AccountView> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: dangerColor,
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
@@ -1079,16 +1515,13 @@ class _AccountViewState extends State<AccountView> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: isReadOnly 
-                  ? Colors.grey[200] 
+              color: isReadOnly
+                  ? Colors.grey[200]
                   : accentColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(
-              icon, 
-              color: isReadOnly ? Colors.grey[600] : primaryColor, 
-              size: 20
-            ),
+            child: Icon(icon,
+                color: isReadOnly ? Colors.grey[600] : primaryColor, size: 20),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -1107,7 +1540,8 @@ class _AccountViewState extends State<AccountView> {
                     ),
                     if (isReadOnly) ...[
                       const SizedBox(width: 6),
-                      Icon(Icons.lock_outline, size: 12, color: Colors.grey[500]),
+                      Icon(Icons.lock_outline,
+                          size: 12, color: Colors.grey[500]),
                     ],
                   ],
                 ),
@@ -1221,7 +1655,7 @@ class _AccountViewState extends State<AccountView> {
   }
 
   String _formatDate(String? dateStr) {
-    if (dateStr == null) return '-';
+    if (dateStr == null || !_isValidDate(dateStr)) return '-';
     try {
       final date = DateTime.parse(dateStr);
       return '${date.day}/${date.month}/${date.year}';
