@@ -27,13 +27,51 @@ class _McqPageState extends State<McqPage> {
           .select('*, mcq_question(count)')
           .order('created_at', ascending: false);
 
+      // ✅ DATA VALIDATION: Validate response structure
+      if (response == null) {
+        print('⚠️ Response null dari server');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // ✅ DATA VALIDATION: Filter valid MCQ sets
+      List<Map<String, dynamic>> validMcqSets = [];
+      for (var mcqSet in response) {
+        // Validate required fields
+        if (mcqSet['id'] == null || mcqSet['title'] == null) {
+          print('⚠️ Skip set MCQ tidak valid: ID atau tajuk tiada');
+          continue;
+        }
+
+        // Validate data types
+        if (mcqSet['id'] is! String && mcqSet['id'] is! int) {
+          print('⚠️ Skip set MCQ: ID bukan string atau integer');
+          continue;
+        }
+
+        // Ensure title is not empty after trimming
+        if (mcqSet['title'].toString().trim().isEmpty) {
+          print('⚠️ Skip set MCQ: Tajuk kosong');
+          continue;
+        }
+
+        validMcqSets.add(mcqSet);
+      }
+
       setState(() {
-        _mcqSetList = List<Map<String, dynamic>>.from(response);
+        _mcqSetList = validMcqSets;
         _isLoading = false;
       });
     } catch (e) {
-      print('Ralat memuat set MCQ: $e');
+      print('❌ Ralat memuat set MCQ: $e');
       setState(() => _isLoading = false);
+      // Show error to user
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memuat set MCQ'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -45,6 +83,17 @@ class _McqPageState extends State<McqPage> {
   }
 
   Future<void> _editMcqSet(Map<String, dynamic> mcqSet) async {
+    // ✅ DATA VALIDATION: Validate MCQ set before editing
+    if (mcqSet['id'] == null || mcqSet['title'] == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Set MCQ tidak valid untuk diedit'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     await showDialog(
       context: context,
       builder: (context) => CreateMcqSetDialog(mcqSet: mcqSet, onSave: _loadMcqSets),
@@ -53,6 +102,17 @@ class _McqPageState extends State<McqPage> {
 
   Future<void> _deleteMcqSet(String id) async {
     try {
+      // ✅ DATA VALIDATION: Validate ID before deletion
+      if (id.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ID set MCQ tidak valid'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
       bool confirm = await showDialog(
             context: context,
             builder: (context) => AlertDialog(
@@ -74,11 +134,13 @@ class _McqPageState extends State<McqPage> {
           false;
 
       if (confirm) {
+        // Delete questions first (foreign key constraint)
         await _supabase
             .from('mcq_question')
             .delete()
             .eq('mcq_set_id', id);
 
+        // Then delete the MCQ set
         await _supabase.from('mcq_set').delete().eq('id', id);
 
         _loadMcqSets();
@@ -87,11 +149,28 @@ class _McqPageState extends State<McqPage> {
         );
       }
     } catch (e) {
-      print('Ralat memadam set MCQ: $e');
+      print('❌ Ralat memadam set MCQ: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memadam set MCQ: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   void _manageQuestions(Map<String, dynamic> mcqSet) {
+    // ✅ DATA VALIDATION: Validate MCQ set before navigation
+    if (mcqSet['id'] == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Set MCQ tidak valid'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -124,10 +203,17 @@ class _McqPageState extends State<McqPage> {
                   itemCount: _mcqSetList.length,
                   itemBuilder: (context, index) {
                     final mcqSet = _mcqSetList[index];
+                    
+                    // ✅ DATA VALIDATION: Safe access to nested data
                     final questionCount = mcqSet['mcq_question'] != null &&
                             (mcqSet['mcq_question'] as List).isNotEmpty
-                        ? mcqSet['mcq_question'][0]['count'] ?? 0
+                        ? (mcqSet['mcq_question'][0] as Map<String, dynamic>)['count'] ?? 0
                         : 0;
+                    
+                    // ✅ DATA VALIDATION: Safe title display
+                    final title = mcqSet['title']?.toString() ?? 'Tiada Tajuk';
+                    final description = mcqSet['description']?.toString();
+                    
                     return Card(
                       color: TeacherColors.card,
                       elevation: 2,
@@ -135,15 +221,15 @@ class _McqPageState extends State<McqPage> {
                       child: ListTile(
                         leading: Icon(Icons.quiz, color: const Color.fromARGB(255, 174, 202, 160), size: 32),
                         title: Text(
-                          mcqSet['title'] ?? 'Tiada Tajuk',
+                          title,
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (mcqSet['description'] != null &&
-                                mcqSet['description'].toString().isNotEmpty)
-                              Text(mcqSet['description']),
+                            if (description != null &&
+                                description.trim().isNotEmpty)
+                              Text(description),
                             Text('$questionCount soalan'),
                           ],
                         ),
@@ -162,7 +248,7 @@ class _McqPageState extends State<McqPage> {
                             ),
                             IconButton(
                               icon: Icon(Icons.delete, color: TeacherColors.danger),
-                              onPressed: () => _deleteMcqSet(mcqSet['id']),
+                              onPressed: () => _deleteMcqSet(mcqSet['id'].toString()),
                               tooltip: 'Padam Set',
                             ),
                           ],
@@ -208,8 +294,9 @@ class _CreateMcqSetDialogState extends State<CreateMcqSetDialog> {
   void initState() {
     super.initState();
     if (widget.mcqSet != null) {
-      _titleController.text = widget.mcqSet!['title'] ?? '';
-      _descriptionController.text = widget.mcqSet!['description'] ?? '';
+      // ✅ DATA VALIDATION: Safe initialization
+      _titleController.text = widget.mcqSet!['title']?.toString() ?? '';
+      _descriptionController.text = widget.mcqSet!['description']?.toString() ?? '';
     }
   }
 
@@ -224,18 +311,37 @@ class _CreateMcqSetDialogState extends State<CreateMcqSetDialog> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isSaving = true);
       try {
+        final title = _titleController.text.trim();
+        final description = _descriptionController.text.trim();
+        
+        // ✅ DATA VALIDATION: Additional validation
+        if (title.isEmpty) {
+          throw Exception('Tajuk tidak boleh kosong');
+        }
+
+        if (title.length > 200) {
+          throw Exception('Tajuk terlalu panjang (maksimum 200 aksara)');
+        }
+
+        if (description.length > 500) {
+          throw Exception('Penerangan terlalu panjang (maksimum 500 aksara)');
+        }
+
         final mcqSetData = {
-          'title': _titleController.text.trim(),
-          'description': _descriptionController.text.trim().isEmpty
-              ? null
-              : _descriptionController.text.trim(),
+          'title': title,
+          'description': description.isEmpty ? null : description,
         };
 
         if (widget.mcqSet != null) {
+          final mcqSetId = widget.mcqSet!['id'];
+          if (mcqSetId == null) {
+            throw Exception('ID set MCQ tidak valid');
+          }
+          
           await _supabase
               .from('mcq_set')
               .update(mcqSetData)
-              .eq('id', widget.mcqSet!['id']);
+              .eq('id', mcqSetId);
         } else {
           await _supabase.from('mcq_set').insert(mcqSetData);
         }
@@ -243,12 +349,19 @@ class _CreateMcqSetDialogState extends State<CreateMcqSetDialog> {
         Navigator.pop(context);
         widget.onSave();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Set MCQ berjaya disimpan!')),
+          SnackBar(
+            content: Text('Set MCQ berjaya disimpan!'),
+            backgroundColor: Colors.green,
+          ),
         );
       } catch (e) {
-        print('Ralat menyimpan set MCQ: $e');
+        print('❌ Ralat menyimpan set MCQ: $e');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ralat menyimpan set MCQ: $e')),
+          SnackBar(
+            content: Text('Ralat menyimpan set MCQ: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
         );
       } finally {
         setState(() => _isSaving = false);
@@ -269,11 +382,20 @@ class _CreateMcqSetDialogState extends State<CreateMcqSetDialog> {
               TextFormField(
                 controller: _titleController,
                 decoration: InputDecoration(
-                  labelText: 'Tajuk Set',
+                  labelText: 'Tajuk Set*',
                   border: OutlineInputBorder(),
+                  hintText: 'Contoh: Ujian Matematik Bab 1',
                 ),
-                validator: (value) =>
-                    value == null || value.trim().isEmpty ? 'Sila masukkan tajuk set' : null,
+                maxLength: 200,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Sila masukkan tajuk set';
+                  }
+                  if (value.trim().length > 200) {
+                    return 'Tajuk terlalu panjang (maksimum 200 aksara)';
+                  }
+                  return null;
+                },
               ),
               SizedBox(height: 16),
               TextFormField(
@@ -281,8 +403,16 @@ class _CreateMcqSetDialogState extends State<CreateMcqSetDialog> {
                 decoration: InputDecoration(
                   labelText: 'Penerangan (opsional)',
                   border: OutlineInputBorder(),
+                  hintText: 'Contoh: Ujian ini meliputi topik algebra...',
                 ),
+                maxLength: 500,
                 maxLines: 2,
+                validator: (value) {
+                  if (value != null && value.length > 500) {
+                    return 'Penerangan terlalu panjang (maksimum 500 aksara)';
+                  }
+                  return null;
+                },
               ),
             ],
           ),
@@ -331,37 +461,124 @@ class _McqQuestionsPageState extends State<McqQuestionsPage> {
 
   Future<void> _loadQuestions() async {
     try {
+      // ✅ DATA VALIDATION: Validate MCQ set ID
+      final mcqSetId = widget.mcqSet['id'];
+      if (mcqSetId == null) {
+        print('⚠️ MCQ Set ID tidak valid');
+        setState(() => _isLoading = false);
+        return;
+      }
+
       final response = await _supabase
           .from('mcq_question')
           .select('*')
-          .eq('mcq_set_id', widget.mcqSet['id'])
+          .eq('mcq_set_id', mcqSetId)
           .order('created_at', ascending: true);
 
+      // ✅ DATA VALIDATION: Validate response
+      if (response == null) {
+        print('⚠️ Response soalan null');
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // ✅ DATA VALIDATION: Filter valid questions
+      List<Map<String, dynamic>> validQuestions = [];
+      for (var question in response) {
+        // Validate required fields
+        if (question['id'] == null || 
+            question['question_text'] == null ||
+            question['correct_answer'] == null) {
+          print('⚠️ Skip soalan tidak valid: ${question['id']}');
+          continue;
+        }
+
+        // Validate correct answer is one of a,b,c,d
+        final correctAnswer = question['correct_answer'].toString().toLowerCase();
+        if (!['a', 'b', 'c', 'd'].contains(correctAnswer)) {
+          print('⚠️ Skip soalan: jawapan betul tidak valid: $correctAnswer');
+          continue;
+        }
+
+        // Validate all options exist
+        final hasAllOptions = ['a', 'b', 'c', 'd'].every((option) {
+          final optionText = question['option_$option'];
+          return optionText != null && optionText.toString().trim().isNotEmpty;
+        });
+
+        if (!hasAllOptions) {
+          print('⚠️ Skip soalan: pilihan jawapan tidak lengkap');
+          continue;
+        }
+
+        validQuestions.add(question);
+      }
+
       setState(() {
-        _questionList = List<Map<String, dynamic>>.from(response as List);
+        _questionList = validQuestions;
         _isLoading = false;
       });
     } catch (e) {
-      print('Ralat memuat soalan: $e');
+      print('❌ Ralat memuat soalan: $e');
       setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memuat soalan'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   Future<void> _addQuestion() async {
+    // ✅ DATA VALIDATION: Validate MCQ set ID
+    final mcqSetId = widget.mcqSet['id'];
+    if (mcqSetId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Set MCQ tidak valid'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     await showDialog(
       context: context,
       builder: (context) => McqQuestionFormDialog(
-        mcqSetId: widget.mcqSet['id'],
+        mcqSetId: mcqSetId,
         onSave: _loadQuestions,
       ),
     );
   }
 
   Future<void> _editQuestion(Map<String, dynamic> question) async {
+    // ✅ DATA VALIDATION: Validate question before editing
+    if (question['id'] == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Soalan tidak valid untuk diedit'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final mcqSetId = widget.mcqSet['id'];
+    if (mcqSetId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Set MCQ tidak valid'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     await showDialog(
       context: context,
       builder: (context) => McqQuestionFormDialog(
-        mcqSetId: widget.mcqSet['id'],
+        mcqSetId: mcqSetId,
         question: question,
         onSave: _loadQuestions,
       ),
@@ -370,6 +587,17 @@ class _McqQuestionsPageState extends State<McqQuestionsPage> {
 
   Future<void> _deleteQuestion(String id) async {
     try {
+      // ✅ DATA VALIDATION: Validate question ID
+      if (id.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ID soalan tidak valid'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
       bool confirm = await showDialog(
             context: context,
             builder: (context) => AlertDialog(
@@ -397,16 +625,25 @@ class _McqQuestionsPageState extends State<McqQuestionsPage> {
         );
       }
     } catch (e) {
-      print('Ralat memadam soalan: $e');
+      print('❌ Ralat memadam soalan: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memadam soalan: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // ✅ DATA VALIDATION: Safe title access
+    final mcqSetTitle = widget.mcqSet['title']?.toString() ?? 'Set MCQ';
+
     return Scaffold(
       backgroundColor: TeacherColors.background,
       appBar: AppBar(
-        title: Text('Urus Soalan - ${widget.mcqSet['title']}'),
+        title: Text('Urus Soalan - $mcqSetTitle'),
         backgroundColor: TeacherColors.topBar,
         foregroundColor: TeacherColors.textDark,
       ),
@@ -430,6 +667,11 @@ class _McqQuestionsPageState extends State<McqQuestionsPage> {
                   itemCount: _questionList.length,
                   itemBuilder: (context, index) {
                     final question = _questionList[index];
+                    
+                    // ✅ DATA VALIDATION: Safe data access
+                    final questionText = question['question_text']?.toString() ?? '[Tiada teks soalan]';
+                    final explanation = question['explanation']?.toString();
+                    
                     return Card(
                       color: TeacherColors.card,
                       elevation: 2,
@@ -451,7 +693,7 @@ class _McqQuestionsPageState extends State<McqQuestionsPage> {
                                 SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    question['question_text'] ?? '',
+                                    questionText,
                                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                                   ),
                                 ),
@@ -462,18 +704,18 @@ class _McqQuestionsPageState extends State<McqQuestionsPage> {
                                 ),
                                 IconButton(
                                   icon: Icon(Icons.delete, color: TeacherColors.danger),
-                                  onPressed: () => _deleteQuestion(question['id']),
+                                  onPressed: () => _deleteQuestion(question['id'].toString()),
                                   tooltip: 'Padam Soalan',
                                 ),
                               ],
                             ),
                             SizedBox(height: 12),
-                            _buildOptionRow('A', question['option_a'], question['correct_answer'] == 'a'),
-                            _buildOptionRow('B', question['option_b'], question['correct_answer'] == 'b'),
-                            _buildOptionRow('C', question['option_c'], question['correct_answer'] == 'c'),
-                            _buildOptionRow('D', question['option_d'], question['correct_answer'] == 'd'),
-                            if (question['explanation'] != null &&
-                                question['explanation'].toString().isNotEmpty)
+                            _buildOptionRow('A', question['option_a']?.toString(), question['correct_answer'] == 'a'),
+                            _buildOptionRow('B', question['option_b']?.toString(), question['correct_answer'] == 'b'),
+                            _buildOptionRow('C', question['option_c']?.toString(), question['correct_answer'] == 'c'),
+                            _buildOptionRow('D', question['option_d']?.toString(), question['correct_answer'] == 'd'),
+                            if (explanation != null &&
+                                explanation.trim().isNotEmpty)
                               Padding(
                                 padding: EdgeInsets.only(top: 8),
                                 child: Container(
@@ -489,7 +731,7 @@ class _McqQuestionsPageState extends State<McqQuestionsPage> {
                                       SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
-                                          question['explanation'],
+                                          explanation,
                                           style: TextStyle(
                                             color: Colors.blue.shade800,
                                             fontStyle: FontStyle.italic,
@@ -516,6 +758,9 @@ class _McqQuestionsPageState extends State<McqQuestionsPage> {
   }
 
   Widget _buildOptionRow(String label, String? text, bool isCorrect) {
+    // ✅ DATA VALIDATION: Safe text display
+    final displayText = text ?? 'Tiada teks';
+    
     return Padding(
       padding: EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -538,7 +783,15 @@ class _McqQuestionsPageState extends State<McqQuestionsPage> {
             ),
           ),
           SizedBox(width: 12),
-          Expanded(child: Text(text ?? '')),
+          Expanded(
+            child: Text(
+              displayText,
+              style: TextStyle(
+                color: isCorrect ? TeacherColors.success : Colors.black87,
+                fontWeight: isCorrect ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ),
           if (isCorrect) Icon(Icons.check_circle, color: TeacherColors.success, size: 20),
         ],
       ),
@@ -582,13 +835,14 @@ class _McqQuestionFormDialogState extends State<McqQuestionFormDialog> {
   void initState() {
     super.initState();
     if (widget.question != null) {
-      _questionController.text = widget.question!['question_text'] ?? '';
-      _optionAController.text = widget.question!['option_a'] ?? '';
-      _optionBController.text = widget.question!['option_b'] ?? '';
-      _optionCController.text = widget.question!['option_c'] ?? '';
-      _optionDController.text = widget.question!['option_d'] ?? '';
-      _correctAnswer = widget.question!['correct_answer'] ?? 'a';
-      _explanationController.text = widget.question!['explanation'] ?? '';
+      // ✅ DATA VALIDATION: Safe initialization with defaults
+      _questionController.text = widget.question!['question_text']?.toString() ?? '';
+      _optionAController.text = widget.question!['option_a']?.toString() ?? '';
+      _optionBController.text = widget.question!['option_b']?.toString() ?? '';
+      _optionCController.text = widget.question!['option_c']?.toString() ?? '';
+      _optionDController.text = widget.question!['option_d']?.toString() ?? '';
+      _correctAnswer = widget.question!['correct_answer']?.toString() ?? 'a';
+      _explanationController.text = widget.question!['explanation']?.toString() ?? '';
     }
   }
 
@@ -607,25 +861,63 @@ class _McqQuestionFormDialogState extends State<McqQuestionFormDialog> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isSaving = true);
       try {
+        // ✅ DATA VALIDATION: Validate all fields
+        final questionText = _questionController.text.trim();
+        final optionA = _optionAController.text.trim();
+        final optionB = _optionBController.text.trim();
+        final optionC = _optionCController.text.trim();
+        final optionD = _optionDController.text.trim();
+        final explanation = _explanationController.text.trim();
+        
+        // Additional validation
+        if (questionText.isEmpty) throw Exception('Soalan tidak boleh kosong');
+        if (optionA.isEmpty) throw Exception('Pilihan A tidak boleh kosong');
+        if (optionB.isEmpty) throw Exception('Pilihan B tidak boleh kosong');
+        if (optionC.isEmpty) throw Exception('Pilihan C tidak boleh kosong');
+        if (optionD.isEmpty) throw Exception('Pilihan D tidak boleh kosong');
+        
+        if (questionText.length > 500) {
+          throw Exception('Soalan terlalu panjang (maksimum 500 aksara)');
+        }
+        
+        if (optionA.length > 200 || optionB.length > 200 || 
+            optionC.length > 200 || optionD.length > 200) {
+          throw Exception('Pilihan jawapan terlalu panjang (maksimum 200 aksara)');
+        }
+        
+        if (explanation.length > 1000) {
+          throw Exception('Penjelasan terlalu panjang (maksimum 1000 aksara)');
+        }
+        
+        // Check for duplicate options
+        final options = [optionA, optionB, optionC, optionD];
+        final uniqueOptions = options.toSet();
+        if (uniqueOptions.length < options.length) {
+          throw Exception('Pilihan jawapan tidak boleh sama');
+        }
+
         final questionData = {
-          'question_text': _questionController.text.trim(),
-          'option_a': _optionAController.text.trim(),
-          'option_b': _optionBController.text.trim(),
-          'option_c': _optionCController.text.trim(),
-          'option_d': _optionDController.text.trim(),
+          'question_text': questionText,
+          'option_a': optionA,
+          'option_b': optionB,
+          'option_c': optionC,
+          'option_d': optionD,
           'correct_answer': _correctAnswer,
-          'explanation': _explanationController.text.trim().isEmpty
-              ? null
-              : _explanationController.text.trim(),
+          'explanation': explanation.isEmpty ? null : explanation,
           'marks': 1,
           'mcq_set_id': widget.mcqSetId,
         };
 
         if (widget.question != null) {
+          final questionId = widget.question!['id'];
+          if (questionId == null) {
+            throw Exception('ID soalan tidak valid');
+          }
+          
           await _supabase
               .from('mcq_question')
               .update(questionData)
-              .eq('id', widget.question!['id']);
+              .eq('id', questionId);
         } else {
           await _supabase.from('mcq_question').insert(questionData);
         }
@@ -633,12 +925,19 @@ class _McqQuestionFormDialogState extends State<McqQuestionFormDialog> {
         Navigator.pop(context);
         widget.onSave();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Soalan berjaya disimpan!')),
+          SnackBar(
+            content: Text('Soalan berjaya disimpan!'),
+            backgroundColor: Colors.green,
+          ),
         );
       } catch (e) {
-        print('Ralat menyimpan soalan: $e');
+        print('❌ Ralat menyimpan soalan: $e');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ralat menyimpan soalan: $e')),
+          SnackBar(
+            content: Text('Ralat menyimpan soalan: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
         );
       } finally {
         setState(() => _isSaving = false);
@@ -674,36 +973,51 @@ class _McqQuestionFormDialogState extends State<McqQuestionFormDialog> {
                       TextFormField(
                         controller: _questionController,
                         decoration: InputDecoration(
-                          labelText: 'Soalan',
+                          labelText: 'Soalan*',
                           border: OutlineInputBorder(),
+                          hintText: 'Masukkan teks soalan di sini...',
                         ),
-                        validator: (value) =>
-                            value == null || value.trim().isEmpty ? 'Sila masukkan soalan' : null,
+                        maxLength: 500,
                         maxLines: 3,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Sila masukkan soalan';
+                          }
+                          if (value.trim().length > 500) {
+                            return 'Soalan terlalu panjang (maksimum 500 aksara)';
+                          }
+                          return null;
+                        },
                       ),
                       SizedBox(height: 16),
-                      Text('Pilihan Jawapan:', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text('Pilihan Jawapan*:', style: TextStyle(fontWeight: FontWeight.bold)),
                       SizedBox(height: 8),
-                      _buildOptionField('A', _optionAController),
+                      _buildOptionField('A', _optionAController, 'Pilihan pertama'),
                       SizedBox(height: 8),
-                      _buildOptionField('B', _optionBController),
+                      _buildOptionField('B', _optionBController, 'Pilihan kedua'),
                       SizedBox(height: 8),
-                      _buildOptionField('C', _optionCController),
+                      _buildOptionField('C', _optionCController, 'Pilihan ketiga'),
                       SizedBox(height: 8),
-                      _buildOptionField('D', _optionDController),
+                      _buildOptionField('D', _optionDController, 'Pilihan keempat'),
                       SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         value: _correctAnswer,
                         decoration: InputDecoration(
-                          labelText: 'Jawapan Betul',
+                          labelText: 'Jawapan Betul*',
                           border: OutlineInputBorder(),
                         ),
-                        items: ['a', 'b', 'c', 'd'].map((option) {
-                          return DropdownMenuItem(
-                            value: option,
-                            child: Text('Pilihan ${option.toUpperCase()}'),
-                          );
-                        }).toList(),
+                        items: [
+                          DropdownMenuItem(value: 'a', child: Text('Pilihan A')),
+                          DropdownMenuItem(value: 'b', child: Text('Pilihan B')),
+                          DropdownMenuItem(value: 'c', child: Text('Pilihan C')),
+                          DropdownMenuItem(value: 'd', child: Text('Pilihan D')),
+                        ],
+                        validator: (value) {
+                          if (value == null || !['a', 'b', 'c', 'd'].contains(value)) {
+                            return 'Sila pilih jawapan betul';
+                          }
+                          return null;
+                        },
                         onChanged: (value) => setState(() => _correctAnswer = value!),
                       ),
                       SizedBox(height: 16),
@@ -712,9 +1026,16 @@ class _McqQuestionFormDialogState extends State<McqQuestionFormDialog> {
                         decoration: InputDecoration(
                           labelText: 'Penjelasan/Catatan (opsional)',
                           border: OutlineInputBorder(),
-                          hintText: 'Ini akan dipaparkan selepas pelajar menjawab',
+                          hintText: 'Masukkan penjelasan atau nota untuk soalan ini...',
                         ),
+                        maxLength: 1000,
                         maxLines: 3,
+                        validator: (value) {
+                          if (value != null && value.length > 1000) {
+                            return 'Penjelasan terlalu panjang (maksimum 1000 aksara)';
+                          }
+                          return null;
+                        },
                       ),
                     ],
                   ),
@@ -754,20 +1075,29 @@ class _McqQuestionFormDialogState extends State<McqQuestionFormDialog> {
     );
   }
 
-  Widget _buildOptionField(String label, TextEditingController controller) {
+  Widget _buildOptionField(String label, TextEditingController controller, String hintText) {
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(
-        labelText: 'Pilihan $label',
+        labelText: 'Pilihan $label*',
         border: OutlineInputBorder(),
+        hintText: hintText,
         prefixIcon: CircleAvatar(
           radius: 12,
           backgroundColor: TeacherColors.primaryGreen,
           child: Text(label, style: TextStyle(color: Colors.white, fontSize: 12)),
         ),
       ),
-      validator: (value) =>
-          value == null || value.trim().isEmpty ? 'Sila masukkan pilihan $label' : null,
+      maxLength: 200,
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Sila masukkan pilihan $label';
+        }
+        if (value.trim().length > 200) {
+          return 'Pilihan terlalu panjang (maksimum 200 aksara)';
+        }
+        return null;
+      },
     );
   }
 }
