@@ -1,7 +1,9 @@
+//lib/screens/mcq_student_page.dart
 import 'package:flutter/material.dart';
 import '../service/supabase_service.dart';
 import '../theme/color.dart';
 import 'student_exercise.dart';
+import 'student_dashboard.dart'; // ✅ IMPORT StudentDashboard
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class McqStudentPage extends StatefulWidget {
@@ -297,8 +299,21 @@ class _McqPracticePageState extends State<McqPracticePage> {
     _loadQuestions();
   }
 
+  // ✅ FIXED: Method untuk kembali ke StudentDashboard (halaman utama)
+  void _goBackToDashboard() {
+    print('🏠 Kembali ke StudentDashboard...');
+    
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StudentDashboard(),
+      ),
+      (route) => false,
+    );
+  }
+
   void _goBackToMcqPage() {
-    print('🚀 Kembali ke halaman utama...');
+    print('🚀 Kembali ke halaman latihan...');
     
     Navigator.pushAndRemoveUntil(
       context,
@@ -309,10 +324,90 @@ class _McqPracticePageState extends State<McqPracticePage> {
     );
   }
 
+  // ✅ FIXED: Popup menu untuk pilihan kembali
+  void _showBackOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(16),
+          topRight: Radius.circular(16),
+        ),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(height: 16),
+            Text(
+              'Pilih destinasi',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 16),
+            
+            // Pilihan 1: Kembali ke StudentDashboard (Halaman Utama)
+            ListTile(
+              leading: Icon(Icons.dashboard, color: Colors.deepPurple),
+              title: Text('Papan Pemuka'),
+              subtitle: Text('Halaman utama dengan statistik'),
+              onTap: () {
+                Navigator.pop(context);
+                _goBackToDashboard();
+              },
+            ),
+            Divider(),
+            
+            // Pilihan 2: Kembali ke Halaman Latihan (dalam module)
+            ListTile(
+              leading: Icon(Icons.quiz, color: StudentColors.primaryGreen),
+              title: Text('Halaman Latihan'),
+              subtitle: Text('Senarai semua ujian latihan'),
+              onTap: () {
+                Navigator.pop(context);
+                _goBackToMcqPage();
+              },
+            ),
+            Divider(),
+            
+            // Pilihan 3: Kembali ke Dashboard StudentExercisePage
+            ListTile(
+              leading: Icon(Icons.apps, color: Colors.blue),
+              title: Text('Dashboard Modul'),
+              subtitle: Text('Halaman dengan 3 tab (Bahan, Latihan, Hantar Tugas)'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => StudentExercisePage(initialTabIndex: 0),
+                  ),
+                  (route) => false,
+                );
+              },
+            ),
+            Divider(),
+            
+            ListTile(
+              leading: Icon(Icons.cancel, color: Colors.grey),
+              title: Text('Batal'),
+              onTap: () => Navigator.pop(context),
+            ),
+            SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadQuestions() async {
     try {
       print('📥 Memuat soalan untuk Set MCQ: ${widget.mcqSet['id']}');
       
+      // Updated to include explanation field
       final response = await _supabase
           .from('mcq_question')
           .select('*')
@@ -582,7 +677,7 @@ class _McqPracticePageState extends State<McqPracticePage> {
         foregroundColor: StudentColors.textDark,
         leading: IconButton(
           icon: Icon(Icons.arrow_back),
-          onPressed: _goBackToMcqPage,
+          onPressed: _showBackOptions, // ✅ GUNA POPUP MENU
         ),
       ),
       body: SingleChildScrollView(
@@ -677,19 +772,35 @@ class _McqPracticePageState extends State<McqPracticePage> {
                   padding: EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     children: [
+                      // Button to view answers and explanations
                       Container(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _goBackToMcqPage,
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => McqReviewPage(
+                                  mcqSet: widget.mcqSet,
+                                  attempt: _result != null ? {
+                                    'score': _result!['score'],
+                                    'total_questions': _result!['total'],
+                                  } : {},
+                                  questions: _questions,
+                                  selectedAnswers: _selectedAnswers,
+                                ),
+                              ),
+                            );
+                          },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: StudentColors.success,
+                            backgroundColor: Colors.blue,
                             padding: EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
                           child: Text(
-                            'KEMBALI KE HALAMAN LATIHAN',
+                            'LIHAT JAWAPAN DAN NOTA GURU',
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -698,7 +809,40 @@ class _McqPracticePageState extends State<McqPracticePage> {
                           ),
                         ),
                       ),
-                      SizedBox(height: 16),
+                      SizedBox(height: 12),
+                      
+                      // ✅ FIXED: Button untuk pilihan kembali (gunakan popup menu)
+                      Container(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _showBackOptions,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: StudentColors.success,
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.arrow_back, color: Colors.white),
+                              SizedBox(width: 8),
+                              Text(
+                                'KEMBALI',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      
+                      // Button untuk ulang ujian
                       Container(
                         width: double.infinity,
                         child: ElevatedButton(
@@ -938,6 +1082,391 @@ class _McqPracticePageState extends State<McqPracticePage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// MCQ REVIEW PAGE FOR VIEWING ANSWERS AND TEACHER NOTES
+// =============================================================================
+
+class McqReviewPage extends StatefulWidget {
+  final Map<String, dynamic> mcqSet;
+  final Map<String, dynamic> attempt;
+  final List<Map<String, dynamic>> questions;
+  final Map<int, String> selectedAnswers;
+
+  const McqReviewPage({
+    required this.mcqSet,
+    required this.attempt,
+    required this.questions,
+    required this.selectedAnswers,
+  });
+
+  @override
+  _McqReviewPageState createState() => _McqReviewPageState();
+}
+
+class _McqReviewPageState extends State<McqReviewPage> {
+  // ✅ FIXED: Method untuk kembali ke StudentDashboard
+  void _goBackToDashboard() {
+    print('🏠 Kembali ke StudentDashboard dari review...');
+    
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StudentDashboard(),
+      ),
+      (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final score = widget.attempt['score'] ?? 0;
+    final total = widget.attempt['total_questions'] ?? widget.questions.length;
+    final percentage = total > 0 ? (score / total * 100) : 0;
+
+    return Scaffold(
+      backgroundColor: StudentColors.background,
+      appBar: AppBar(
+        title: Text('Ulasan Ujian'),
+        backgroundColor: StudentColors.topBar,
+        foregroundColor: StudentColors.textDark,
+      ),
+      body: Column(
+        children: [
+          // Summary Card
+          Container(
+            margin: EdgeInsets.all(16),
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: StudentColors.card,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Text(
+                  widget.mcqSet['title'],
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: StudentColors.textDark,
+                  ),
+                ),
+                SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildStatCard('$score/$total', 'Jawapan Betul'),
+                    _buildStatCard('${percentage.toStringAsFixed(1)}%', 'Peratusan'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: EdgeInsets.all(16),
+              itemCount: widget.questions.length,
+              itemBuilder: (context, index) {
+                return _buildQuestionReview(index);
+              },
+            ),
+          ),
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Colors.grey[200]!)),
+            ),
+            child: Column(
+              children: [
+                // ✅ FIXED: Button untuk kembali ke StudentDashboard
+                ElevatedButton(
+                  onPressed: _goBackToDashboard,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    minimumSize: Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'KEMBALI KE PAPAN PEMUKA',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
+                // Button untuk kembali ke halaman latihan
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => StudentExercisePage(initialTabIndex: 1),
+                      ),
+                      (route) => false,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: StudentColors.primaryGreen,
+                    minimumSize: Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'KEMBALI KE HALAMAN LATIHAN',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(String value, String label) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: StudentColors.primaryGreen,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: StudentColors.textLight,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuestionReview(int index) {
+    final question = widget.questions[index];
+    final questionNumber = index + 1;
+    final selectedAnswer = widget.selectedAnswers[index] ?? '';
+    final correctAnswer = question['correct_answer'] ?? '';
+    final explanation = question['explanation'] ?? 'Tiada nota dari guru';
+    final isCorrect = selectedAnswer == correctAnswer;
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isCorrect ? StudentColors.success : Colors.red,
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Question Header
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isCorrect ? StudentColors.success.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(10),
+                topRight: Radius.circular(10),
+              ),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: isCorrect ? StudentColors.success : Colors.red,
+                  radius: 14,
+                  child: Text(
+                    '$questionNumber',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Soalan $questionNumber',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: StudentColors.textDark,
+                    ),
+                  ),
+                ),
+                Icon(
+                  isCorrect ? Icons.check_circle : Icons.cancel,
+                  color: isCorrect ? StudentColors.success : Colors.red,
+                ),
+              ],
+            ),
+          ),
+          
+          // Question Text
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              question['question_text'] ?? '[Tiada teks soalan]',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: StudentColors.textDark,
+              ),
+            ),
+          ),
+          
+          Divider(height: 1),
+          
+          // Answers Section
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Jawapan Anda:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: StudentColors.textLight,
+                  ),
+                ),
+                SizedBox(height: 8),
+                _buildAnswerDisplay(
+                  selectedAnswer.isNotEmpty ? selectedAnswer : '-',
+                  _getOptionText(question, selectedAnswer),
+                  isCorrect ? StudentColors.success : Colors.red,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Jawapan Betul:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: StudentColors.textLight,
+                  ),
+                ),
+                SizedBox(height: 8),
+                _buildAnswerDisplay(
+                  correctAnswer,
+                  _getOptionText(question, correctAnswer),
+                  StudentColors.success,
+                ),
+              ],
+            ),
+          ),
+          
+          Divider(height: 1),
+          
+          // Explanation Section
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.05),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(10),
+                bottomRight: Radius.circular(10),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.lightbulb_outline, color: Colors.blue, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Nota Guru:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Text(
+                  explanation,
+                  style: TextStyle(
+                    color: StudentColors.textDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ));
+  }
+
+  String _getOptionText(Map<String, dynamic> question, String option) {
+    if (option.isEmpty) return 'Tiada jawapan';
+    final optionText = question['option_$option'];
+    return optionText ?? 'Tiada pilihan';
+  }
+
+  Widget _buildAnswerDisplay(String option, String text, Color color) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3), width: 1),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: color,
+            radius: 12,
+            child: Text(
+              option.toUpperCase(),
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: StudentColors.textDark,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
