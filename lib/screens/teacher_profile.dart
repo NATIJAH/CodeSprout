@@ -578,7 +578,7 @@ class _ViewTeacherProfilePageState extends State<ViewTeacherProfilePage> {
                           final updated = await Navigator.push<bool>(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const EditTeacherProfilePage(),
+                              builder: (_) => const ViewTeacherProfilePage(),
                             ),
                           );
                           if (updated == true) {

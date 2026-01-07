@@ -35,6 +35,9 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
   bool _loadingAi = false;
   final TextEditingController _aiController = TextEditingController();
 
+  // Password change controllers
+  final _passwordFormKey = GlobalKey<FormState>();
+
   // Color scheme
   final Color headerColor = const Color(0xFFE8F4F8);
   final Color cardColor = Colors.white;
@@ -54,8 +57,148 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
     super.dispose();
   }
 
+  // ============ DATA VALIDATION HELPERS ============
+
+  /// Validates if a string is a valid email format
+  bool _isValidEmail(String? email) {
+    if (email == null || email.isEmpty) return false;
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+    );
+    return emailRegex.hasMatch(email);
+  }
+
+  /// Validates if a string is a valid phone number (Malaysian format)
+  bool _isValidPhone(String? phone) {
+    if (phone == null || phone.isEmpty) return true; // Optional field
+    final phoneRegex = RegExp(r'^(\+?6?01)[0-46-9]-*[0-9]{7,8}$');
+    return phoneRegex.hasMatch(phone.replaceAll(RegExp(r'[\s-]'), ''));
+  }
+
+  /// Validates if age is within reasonable range
+  bool _isValidAge(dynamic age) {
+    if (age == null) return true; // Optional field
+    try {
+      final ageInt = age is int ? age : int.parse(age.toString());
+      return ageInt >= 5 && ageInt <= 100;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Validates password strength
+  String? _validatePassword(String? password) {
+    if (password == null || password.isEmpty) {
+      return 'Kata laluan diperlukan';
+    }
+    if (password.length < 8) {
+      return 'Kata laluan mesti sekurang-kurangnya 8 aksara';
+    }
+    if (!password.contains(RegExp(r'[A-Z]'))) {
+      return 'Kata laluan mesti mengandungi huruf besar';
+    }
+    if (!password.contains(RegExp(r'[a-z]'))) {
+      return 'Kata laluan mesti mengandungi huruf kecil';
+    }
+    if (!password.contains(RegExp(r'[0-9]'))) {
+      return 'Kata laluan mesti mengandungi nombor';
+    }
+    return null;
+  }
+
+  /// Sanitizes user input to prevent XSS and injection
+  String _sanitizeInput(String? input) {
+    if (input == null) return '';
+    return input
+        .trim()
+        .replaceAll(RegExp(r'<[^>]*>'), '') // Remove HTML tags
+        .replaceAll(RegExp(r'[^\w\s@.,!?-]'), ''); // Allow safe characters
+  }
+
+  /// Validates AI message input
+  String? _validateAiMessage(String? message) {
+    if (message == null || message.trim().isEmpty) {
+      return 'Sila masukkan soalan anda';
+    }
+    if (message.trim().length < 3) {
+      return 'Soalan terlalu pendek (minimum 3 aksara)';
+    }
+    if (message.length > 500) {
+      return 'Soalan terlalu panjang (maksimum 500 aksara)';
+    }
+    return null;
+  }
+
+  /// Validates profile data before displaying
+  Map<String, dynamic> _validateProfileData(Map<String, dynamic>? data) {
+    if (data == null) return {};
+
+    return {
+      'id': data['id'],
+      'full_name': data['full_name']?.toString().trim() ?? 'Unknown',
+      'email': _isValidEmail(data['email']?.toString())
+          ? data['email']
+          : 'Invalid Email',
+      'matric_no': data['matric_no']?.toString().trim() ?? '-',
+      'phone': _isValidPhone(data['phone']?.toString())
+          ? data['phone']
+          : 'Invalid Phone',
+      'age': _isValidAge(data['age']) ? data['age'] : null,
+      'class': data['class']?.toString().trim() ?? '-',
+      'institution': data['institution']?.toString().trim() ?? 'PELAJAR',
+      'avatar_url': data['avatar_url']?.toString().isNotEmpty == true
+          ? data['avatar_url']
+          : null,
+      'created_at': data['created_at'],
+    };
+  }
+
+  /// Validates statistics data
+  bool _validateStatisticsData(List<dynamic> tasks) {
+    try {
+      for (var task in tasks) {
+        if (task is! Map) return false;
+        
+        // Validate points if present
+        if (task['points'] != null) {
+          final points = num.tryParse(task['points'].toString());
+          if (points == null || points < 0 || points > 100) {
+            debugPrint('Invalid points value: ${task['points']}');
+          }
+        }
+
+        // Validate dates if present
+        if (task['completed_timestamp'] != null) {
+          try {
+            DateTime.parse(task['completed_timestamp']);
+          } catch (e) {
+            debugPrint('Invalid completed_timestamp: ${task['completed_timestamp']}');
+          }
+        }
+
+        if (task['due_date'] != null) {
+          try {
+            DateTime.parse(task['due_date']);
+          } catch (e) {
+            debugPrint('Invalid due_date: ${task['due_date']}');
+          }
+        }
+      }
+      return true;
+    } catch (e) {
+      debugPrint('Statistics validation error: $e');
+      return false;
+    }
+  }
+
+  // ============ DATA FETCHING WITH VALIDATION ============
+
   Future<void> fetchProfile() async {
-    setState(() => loading = true);
+    setState(() {
+      loading = true;
+      errorMsg = null;
+    });
+
     try {
       final user = supabase.auth.currentUser;
       if (user == null) {
@@ -66,30 +209,51 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
         return;
       }
 
+      // Validate user ID
+      if (user.id.isEmpty) {
+        throw Exception('Invalid user ID');
+      }
+
       final data = await supabase
           .from("profile_student")
           .select()
           .eq("id", user.id)
           .maybeSingle();
 
+      if (data == null) {
+        setState(() {
+          loading = false;
+          errorMsg = "Profile not found";
+        });
+        return;
+      }
+
+      // Validate and sanitize profile data
+      final validatedProfile = _validateProfileData(data);
+
       setState(() {
-        profile = data;
+        profile = validatedProfile;
         loading = false;
         errorMsg = null;
       });
     } catch (e) {
+      debugPrint('Profile fetch error: $e');
       setState(() {
         loading = false;
-        errorMsg = "Error loading profile: $e";
+        errorMsg = "Error loading profile: ${e.toString()}";
       });
     }
   }
 
   Future<void> fetchStatistics() async {
     setState(() => loadingStats = true);
+    
     try {
       final user = supabase.auth.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        setState(() => loadingStats = false);
+        return;
+      }
 
       // Get profile to get email
       final profileData = await supabase
@@ -98,9 +262,19 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
           .eq("id", user.id)
           .maybeSingle();
 
-      if (profileData == null) return;
+      if (profileData == null) {
+        setState(() => loadingStats = false);
+        return;
+      }
 
       final userEmail = profileData['email'];
+
+      // Validate email
+      if (!_isValidEmail(userEmail?.toString())) {
+        debugPrint('Invalid email in profile: $userEmail');
+        setState(() => loadingStats = false);
+        return;
+      }
 
       // 1. Total Assignments Completed
       final completedTasks = await supabase
@@ -109,66 +283,162 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
           .eq('student_email', userEmail)
           .eq('status', 'completed');
 
+      // Validate tasks data
+      if (!_validateStatisticsData(completedTasks)) {
+        debugPrint('Invalid tasks data structure');
+      }
+
       totalAssignments = completedTasks.length;
 
-      // 2. Average Grade (from points)
+      // 2. Average Grade (from points) with validation
       if (completedTasks.isNotEmpty) {
         final points = completedTasks
             .where((task) => task['points'] != null)
-            .map((task) => (task['points'] as num).toDouble())
+            .map((task) {
+              try {
+                final pointValue = num.tryParse(task['points'].toString());
+                if (pointValue != null && pointValue >= 0 && pointValue <= 100) {
+                  return pointValue.toDouble();
+                }
+                return null;
+              } catch (e) {
+                debugPrint('Invalid point value: ${task['points']}');
+                return null;
+              }
+            })
+            .where((point) => point != null)
+            .cast<double>()
             .toList();
 
         if (points.isNotEmpty) {
           averageGrade = points.reduce((a, b) => a + b) / points.length;
+          // Ensure average is within valid range
+          averageGrade = averageGrade.clamp(0.0, 100.0);
         }
       }
 
-      // 3. Days Active (from created_at)
+      // 3. Days Active (from created_at) with validation
       if (profileData['created_at'] != null) {
-        final createdDate = DateTime.parse(profileData['created_at']);
-        daysActive = DateTime.now().difference(createdDate).inDays;
+        try {
+          final createdDate = DateTime.parse(profileData['created_at']);
+          final now = DateTime.now();
+          
+          // Validate date is not in the future
+          if (createdDate.isAfter(now)) {
+            debugPrint('Invalid created_at date (future date): $createdDate');
+            daysActive = 0;
+          } else {
+            daysActive = now.difference(createdDate).inDays;
+            // Ensure reasonable range
+            daysActive = daysActive.clamp(0, 10000);
+          }
+        } catch (e) {
+          debugPrint("Date parse error: $e");
+          daysActive = 0;
+        }
       }
 
-      // 4. On Time vs Late
+      // 4. On Time vs Late with validation
+      int validOnTimeCount = 0;
+      int validLateCount = 0;
+
       for (var task in completedTasks) {
         if (task['completed_timestamp'] != null && task['due_date'] != null) {
           try {
             final completed = DateTime.parse(task['completed_timestamp']);
             final due = DateTime.parse(task['due_date']);
 
+            // Validate dates are reasonable
+            final now = DateTime.now();
+            if (completed.isAfter(now.add(const Duration(days: 1)))) {
+              debugPrint('Invalid completed date (future): $completed');
+              continue;
+            }
+
             if (completed.isBefore(due) || completed.isAtSameMomentAs(due)) {
-              onTimeCount++;
+              validOnTimeCount++;
             } else {
-              lateCount++;
+              validLateCount++;
             }
           } catch (e) {
-            debugPrint("Date parse error: $e");
+            debugPrint("Date parse error in task: $e");
           }
         }
       }
 
+      onTimeCount = validOnTimeCount;
+      lateCount = validLateCount;
+
       setState(() => loadingStats = false);
     } catch (e) {
       debugPrint("Statistics error: $e");
-      setState(() => loadingStats = false);
+      setState(() {
+        loadingStats = false;
+        // Reset to safe defaults
+        totalAssignments = 0;
+        averageGrade = 0.0;
+        daysActive = 0;
+        onTimeCount = 0;
+        lateCount = 0;
+      });
     }
   }
 
   Future<void> pickAndUploadImage() async {
-    final result = await storageHelper.pickAndUploadImage(bucketName: 'profile-images');
-    if (result != null && result['url'] != null) {
-      await supabase
-          .from("profile_student")
-          .update({"avatar_url": result['url']})
-          .eq("id", supabase.auth.currentUser!.id);
+    try {
+      final result = await storageHelper.pickAndUploadImage(
+        bucketName: 'profile-images',
+      );
+      
+      if (result != null && result['url'] != null) {
+        final url = result['url'].toString();
+        
+        // Validate URL format
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          throw Exception('Invalid image URL format');
+        }
 
-      fetchProfile();
+        await supabase
+            .from("profile_student")
+            .update({"avatar_url": url})
+            .eq("id", supabase.auth.currentUser!.id);
+
+        await fetchProfile();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Gambar profil berjaya dikemas kini')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Image upload error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ralat memuat naik gambar: $e')),
+        );
+      }
     }
   }
 
-  // AI Support Function
+  // ============ AI SUPPORT WITH VALIDATION ============
+
   Future<void> _askAi(String message, [Function? dialogSetState]) async {
     if (!mounted) return;
+
+    // Validate message
+    final validationError = _validateAiMessage(message);
+    if (validationError != null) {
+      final updateState = dialogSetState ?? setState;
+      updateState(() {
+        _aiReply = validationError;
+        _loadingAi = false;
+      });
+      return;
+    }
+
+    // Sanitize input
+    final sanitizedMessage = _sanitizeInput(message);
 
     final updateState = dialogSetState ?? setState;
 
@@ -178,7 +448,7 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
     });
 
     try {
-      debugPrint("🤖 Asking AI: $message");
+      debugPrint("🤖 Asking AI: $sanitizedMessage");
 
       if (kIsWeb) {
         final req = html.HttpRequest();
@@ -188,7 +458,11 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
             'https://fyvfocfbxrdaoyecbfzm.supabase.co/functions/v1/ai-support',
           )
           ..setRequestHeader('Content-Type', 'application/json')
-          ..setRequestHeader('Authorization', 'Bearer ${supabase.auth.currentSession?.accessToken ?? ""}')
+          ..setRequestHeader(
+            'Authorization',
+            'Bearer ${supabase.auth.currentSession?.accessToken ?? ""}',
+          )
+          ..timeout = 30000 // 30 second timeout
           ..onLoad.first.then((_) {
             if (!mounted) return;
             try {
@@ -197,12 +471,25 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                 if (responseData != null && responseData.isNotEmpty) {
                   final jsonResp = jsonDecode(responseData);
 
-                  if (!mounted) return;
-                  updateState(() {
-                    _aiReply = jsonResp['message'] ?? "Tiada jawapan dari AI.";
-                    _loadingAi = false;
-                  });
+                  // Validate response
+                  if (jsonResp is Map && jsonResp.containsKey('message')) {
+                    final aiMessage = jsonResp['message']?.toString() ?? '';
+                    
+                    if (!mounted) return;
+                    updateState(() {
+                      _aiReply = aiMessage.isEmpty
+                          ? "Tiada jawapan dari AI."
+                          : _sanitizeInput(aiMessage);
+                      _loadingAi = false;
+                    });
+                  } else {
+                    throw Exception('Invalid response format');
+                  }
+                } else {
+                  throw Exception('Empty response');
                 }
+              } else {
+                throw Exception('HTTP ${req.status}: ${req.statusText}');
               }
             } catch (e) {
               debugPrint("❌ AI Parse error: $e");
@@ -221,16 +508,29 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
               _loadingAi = false;
             });
           })
-          ..send(jsonEncode({'message': message}));
+          ..onTimeout.first.then((_) {
+            debugPrint("❌ AI Request timeout");
+            if (!mounted) return;
+            updateState(() {
+              _aiReply = "Permintaan tamat masa. Sila cuba lagi.";
+              _loadingAi = false;
+            });
+          })
+          ..send(jsonEncode({'message': sanitizedMessage}));
       } else {
         final response = await supabase.functions.invoke(
           'ai-support',
-          body: {'message': message},
+          body: {'message': sanitizedMessage},
         );
 
         if (!mounted) return;
+        
+        final aiMessage = response.data?['message']?.toString() ?? '';
+        
         updateState(() {
-          _aiReply = response.data?['message'] ?? "Tiada jawapan dari AI.";
+          _aiReply = aiMessage.isEmpty
+              ? "Tiada jawapan dari AI."
+              : _sanitizeInput(aiMessage);
           _loadingAi = false;
         });
       }
@@ -238,13 +538,18 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
       debugPrint("❌ AI error: $e");
       if (!mounted) return;
       updateState(() {
-        _aiReply = "Ralat berlaku: $e";
+        _aiReply = "Ralat berlaku: ${e.toString()}";
         _loadingAi = false;
       });
     }
   }
 
   void _openAiSupport() {
+    // Reset state when opening dialog
+    _aiController.clear();
+    _aiReply = "";
+    _loadingAi = false;
+
     showDialog(
       context: context,
       builder: (_) => StatefulBuilder(
@@ -257,11 +562,16 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                 children: [
                   TextField(
                     controller: _aiController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: "Tanya soalan anda...",
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
+                      counterText: '${_aiController.text.length}/500',
                     ),
                     maxLines: 3,
+                    maxLength: 500,
+                    onChanged: (value) {
+                      setDialogState(() {}); // Update character count
+                    },
                   ),
                   const SizedBox(height: 12),
                   if (_loadingAi)
@@ -305,12 +615,14 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                 child: const Text("Tutup"),
               ),
               ElevatedButton(
-                onPressed: _loadingAi ? null : () {
-                  final text = _aiController.text.trim();
-                  if (text.isNotEmpty) {
-                    _askAi(text, setDialogState);
-                  }
-                },
+                onPressed: _loadingAi
+                    ? null
+                    : () {
+                        final text = _aiController.text.trim();
+                        if (text.isNotEmpty) {
+                          _askAi(text, setDialogState);
+                        }
+                      },
                 child: const Text("Tanya AI"),
               ),
             ],
@@ -320,92 +632,155 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
     );
   }
 
+  // ============ PASSWORD CHANGE WITH VALIDATION ============
+
   void _showChangePasswordDialog() {
     final oldPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
     final confirmPasswordController = TextEditingController();
+    bool obscureOld = true;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Tukar Kata Laluan"),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: oldPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: "Kata Laluan Lama",
-                  border: OutlineInputBorder(),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text("Tukar Kata Laluan"),
+            content: SingleChildScrollView(
+              child: Form(
+                key: _passwordFormKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: oldPasswordController,
+                      obscureText: obscureOld,
+                      decoration: InputDecoration(
+                        labelText: "Kata Laluan Lama",
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureOld ? Icons.visibility : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setDialogState(() {
+                              obscureOld = !obscureOld;
+                            });
+                          },
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Sila masukkan kata laluan lama';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: newPasswordController,
+                      obscureText: obscureNew,
+                      decoration: InputDecoration(
+                        labelText: "Kata Laluan Baru",
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureNew ? Icons.visibility : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setDialogState(() {
+                              obscureNew = !obscureNew;
+                            });
+                          },
+                        ),
+                        helperText: 'Min 8 aksara, huruf besar/kecil, nombor',
+                        helperMaxLines: 2,
+                      ),
+                      validator: _validatePassword,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: confirmPasswordController,
+                      obscureText: obscureConfirm,
+                      decoration: InputDecoration(
+                        labelText: "Sahkan Kata Laluan Baru",
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureConfirm
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setDialogState(() {
+                              obscureConfirm = !obscureConfirm;
+                            });
+                          },
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Sila sahkan kata laluan baru';
+                        }
+                        if (value != newPasswordController.text) {
+                          return 'Kata laluan tidak sepadan';
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: newPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: "Kata Laluan Baru",
-                  border: OutlineInputBorder(),
-                ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Batal"),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: confirmPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: "Sahkan Kata Laluan Baru",
-                  border: OutlineInputBorder(),
-                ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (_passwordFormKey.currentState?.validate() != true) {
+                    return;
+                  }
+
+                  final newPass = newPasswordController.text.trim();
+
+                  try {
+                    await supabase.auth.updateUser(
+                      UserAttributes(password: newPass),
+                    );
+                    
+                    if (!mounted) return;
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Kata laluan berjaya ditukar!"),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } catch (e) {
+                    debugPrint('Password change error: $e');
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Ralat: ${e.toString()}"),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+                child: const Text("Tukar"),
               ),
             ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Batal"),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final newPass = newPasswordController.text.trim();
-              final confirmPass = confirmPasswordController.text.trim();
-
-              if (newPass.isEmpty || confirmPass.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Sila isi semua medan")),
-                );
-                return;
-              }
-
-              if (newPass != confirmPass) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Kata laluan tidak sepadan")),
-                );
-                return;
-              }
-
-              try {
-                await supabase.auth.updateUser(UserAttributes(password: newPass));
-                if (!mounted) return;
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Kata laluan berjaya ditukar!")),
-                );
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Ralat: $e")),
-                );
-              }
-            },
-            child: const Text("Tukar"),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
+
+  // ============ UI BUILD ============
 
   @override
   Widget build(BuildContext context) {
@@ -416,12 +791,47 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
     }
 
     if (errorMsg != null) {
-      return Scaffold(body: Center(child: Text(errorMsg!)));
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              Text(
+                errorMsg!,
+                style: const TextStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: fetchProfile,
+                child: const Text('Cuba Semula'),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     if (profile == null) {
-      return const Scaffold(
-          body: Center(child: Text("No student profile found")));
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.person_off, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text("No student profile found"),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: fetchProfile,
+                child: const Text('Cuba Semula'),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return Scaffold(
@@ -467,7 +877,8 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                               ? NetworkImage(profile!['avatar_url'])
                               : null,
                           child: profile!['avatar_url'] == null
-                              ? const Icon(Icons.person, size: 70, color: Colors.white)
+                              ? const Icon(Icons.person,
+                                  size: 70, color: Colors.white)
                               : null,
                         ),
                       ),
@@ -495,7 +906,8 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    profile!['full_name']?.toString().toUpperCase() ?? "STUDENT NAME",
+                    profile!['full_name']?.toString().toUpperCase() ??
+                        "STUDENT NAME",
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -538,7 +950,8 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                 ),
                 child: Center(
                   child: Text(
-                    profile!['institution']?.toString().toUpperCase() ?? "PELAJAR",
+                    profile!['institution']?.toString().toUpperCase() ??
+                        "PELAJAR",
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -656,33 +1069,33 @@ class _ViewProfilePageState extends State<ViewProfilePage> {
                     child: loadingStats
                         ? const Center(child: CircularProgressIndicator())
                         : Column(
-                      children: [
-                        _statRow(
-                            "Total Assignments Completed",
-                            totalAssignments.toString(),
-                            Icons.check_circle,
-                            Colors.green),
-                        const Divider(height: 30),
-                        _statRow(
-                            "Average Grade",
-                            averageGrade > 0
-                                ? "${averageGrade.toStringAsFixed(1)} points"
-                                : "N/A",
-                            Icons.star,
-                            Colors.amber),
-                        const Divider(height: 30),
-                        _statRow("Days Active", "$daysActive days",
-                            Icons.calendar_today, Colors.blue),
-                        const Divider(height: 30),
-                        _statRow(
-                            "On Time / Late",
-                            "$onTimeCount / $lateCount",
-                            Icons.timer,
-                            onTimeCount > lateCount
-                                ? Colors.green
-                                : Colors.orange),
-                      ],
-                    ),
+                            children: [
+                              _statRow(
+                                  "Total Assignments Completed",
+                                  totalAssignments.toString(),
+                                  Icons.check_circle,
+                                  Colors.green),
+                              const Divider(height: 30),
+                              _statRow(
+                                  "Average Grade",
+                                  averageGrade > 0
+                                      ? "${averageGrade.toStringAsFixed(1)} points"
+                                      : "N/A",
+                                  Icons.star,
+                                  Colors.amber),
+                              const Divider(height: 30),
+                              _statRow("Days Active", "$daysActive days",
+                                  Icons.calendar_today, Colors.blue),
+                              const Divider(height: 30),
+                              _statRow(
+                                  "On Time / Late",
+                                  "$onTimeCount / $lateCount",
+                                  Icons.timer,
+                                  onTimeCount > lateCount
+                                      ? Colors.green
+                                      : Colors.orange),
+                            ],
+                          ),
                   ),
                 ],
               ),
