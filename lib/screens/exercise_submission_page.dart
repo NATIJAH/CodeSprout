@@ -56,7 +56,8 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('Hantar Tugasan Baru'),
+          backgroundColor: Colors.white,
+          title: Text('Hantar Tugasan Baru', style: TextStyle(color: Color(0xFF2E7D32))),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -64,15 +65,23 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
                 controller: titleController,
                 decoration: InputDecoration(
                   labelText: 'Nama Tugasan*',
+                  labelStyle: TextStyle(color: Color(0xFF6B9B7F)),
                   hintText: 'Contoh: Latihan Bab 3',
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFF6B9B7F)),
+                  ),
                 ),
               ),
-              SizedBox(height: 10),
+              SizedBox(height: 16),
               TextField(
                 controller: descController,
                 decoration: InputDecoration(
                   labelText: 'Description (optional)',
+                  labelStyle: TextStyle(color: Color(0xFF6B9B7F)),
                   hintText: 'Penerangan tentang tugasan...',
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Color(0xFF6B9B7F)),
+                  ),
                 ),
                 maxLines: 3,
               ),
@@ -81,7 +90,7 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Batal'),
+              child: Text('Batal', style: TextStyle(color: Colors.grey[700])),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -91,8 +100,13 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
                   description: descController.text,
                 );
               },
-              child: Text('Pilih File'),
-              style: ElevatedButton.styleFrom(backgroundColor: const Color.fromARGB(255, 144, 194, 146)),
+              child: Text('Pilih File', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF6B9B7F),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
             ),
           ],
         );
@@ -144,14 +158,25 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('✅ TUGASAN BERJAYA DIHANTAR!'),
-          backgroundColor: const Color.fromARGB(255, 159, 199, 160),
+          backgroundColor: Color(0xFF6B9B7F),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
         ),
       );
 
     } catch (e) {
       print('Upload error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal: $e'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Gagal: $e'), 
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
       );
     }
   }
@@ -168,18 +193,31 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Edit Tugasan'),
+        backgroundColor: Colors.white,
+        title: Text('Edit Tugasan', style: TextStyle(color: Color(0xFF2E7D32))),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: titleController,
-              decoration: InputDecoration(labelText: 'Nama Tugasan'),
+              decoration: InputDecoration(
+                labelText: 'Nama Tugasan',
+                labelStyle: TextStyle(color: Color(0xFF6B9B7F)),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF6B9B7F)),
+                ),
+              ),
             ),
-            SizedBox(height: 10),
+            SizedBox(height: 16),
             TextField(
               controller: descController,
-              decoration: InputDecoration(labelText: 'Description'),
+              decoration: InputDecoration(
+                labelText: 'Description',
+                labelStyle: TextStyle(color: Color(0xFF6B9B7F)),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF6B9B7F)),
+                ),
+              ),
               maxLines: 3,
             ),
           ],
@@ -187,7 +225,7 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Batal'),
+            child: Text('Batal', style: TextStyle(color: Colors.grey[700])),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -198,8 +236,13 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
                 description: descController.text,
               );
             },
-            child: Text('Simpan'),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color.fromARGB(255, 147, 187, 148)),
+            child: Text('Simpan', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFF6B9B7F),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
           ),
         ],
       ),
@@ -225,7 +268,11 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('✅ Tugasan dikemaskini!'), 
-          backgroundColor: const Color.fromARGB(255, 156, 206, 157),
+          backgroundColor: Color(0xFF6B9B7F),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
         ),
       );
     } catch (e) {
@@ -234,6 +281,10 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
         SnackBar(
           content: Text('Gagal update: $e'), 
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
         ),
       );
     }
@@ -243,17 +294,23 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
     bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Padam Tugasan?'),
+        backgroundColor: Colors.white,
+        title: Text('Padam Tugasan?', style: TextStyle(color: Colors.red)),
         content: Text('Adakah anda pasti mahu padam tugasan ini?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Batal'),
+            child: Text('Batal', style: TextStyle(color: Colors.grey[700])),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('Padam'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Padam', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
           ),
         ],
       ),
@@ -276,7 +333,11 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('✅ Tugasan dipadam!'),
-          backgroundColor: const Color.fromARGB(255, 166, 214, 167),
+          backgroundColor: Color(0xFF6B9B7F),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
         ),
       );
     } catch (e) {
@@ -285,6 +346,10 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
         SnackBar(
           content: Text('Gagal padam: $e'),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
         ),
       );
     }
@@ -294,21 +359,46 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
     bool isGraded = submission['graded'] == true;
     bool isEditable = submission['is_editable'] != false && !isGraded;
     
-    return Card(
-      color: Colors.white,
+    return Container(
       margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 8,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
       child: ListTile(
-        leading: Icon(
-          isGraded ? Icons.assignment_turned_in : Icons.assignment,
-          color: isGraded ? const Color.fromARGB(255, 140, 218, 142) : Colors.blue,
-          size: 32,
+        contentPadding: EdgeInsets.all(16),
+        leading: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: isGraded 
+              ? Color(0xFF66BB6A).withOpacity(0.15)
+              : Color(0xFF6B9B7F).withOpacity(0.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            isGraded ? Icons.assignment_turned_in : Icons.assignment,
+            color: isGraded ? Color(0xFF66BB6A) : Color(0xFF6B9B7F),
+            size: 24,
+          ),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               submission['assignment_title']?.toString() ?? 'Tugasan',
-              style: TextStyle(fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2E7D32),
+                fontSize: 15,
+              ),
             ),
             if (submission['description'] != null && 
                 submission['description'].toString().isNotEmpty)
@@ -316,28 +406,55 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
                 padding: EdgeInsets.only(top: 4),
                 child: Text(
                   submission['description'].toString(),
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                 ),
               ),
           ],
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(submission['file_name']?.toString() ?? 'File'),
-            Text('Dihantar: ${_formatDate(submission['submitted_at']?.toString())}'),
-            if (isGraded) 
-              Text('✅ Sudah Dinilai', style: TextStyle(color: Colors.green)),
-          ],
+        subtitle: Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                submission['file_name']?.toString() ?? 'File',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Dihantar: ${_formatDate(submission['submitted_at']?.toString())}',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              if (isGraded) 
+                Container(
+                  margin: EdgeInsets.only(top: 6),
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Color(0xFF66BB6A).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Color(0xFF66BB6A).withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    '✅ Sudah Dinilai', 
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF2E7D32),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
         trailing: isEditable
             ? PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert, color: Color(0xFF6B9B7F)),
                 itemBuilder: (context) => [
                   PopupMenuItem<String>(
                     value: 'edit',
                     child: Row(
                       children: [
-                        Icon(Icons.edit, color: Colors.blue, size: 20),
+                        Icon(Icons.edit, color: Color(0xFF6B9B7F), size: 20),
                         SizedBox(width: 8),
                         Text('Edit'),
                       ],
@@ -372,10 +489,10 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
   }
 
   String _formatDate(String? dateString) {
-    if (dateString == null) return 'Unknown date';
+    if (dateString == null) return 'Tarikh tidak diketahui';
     try {
       final date = DateTime.parse(dateString);
-      return '${date.day}/${date.month}/${date.year}';
+      return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
     } catch (e) {
       return dateString;
     }
@@ -384,37 +501,81 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Color(0xFFE8F5E9),
       appBar: AppBar(
-        title: Text('Hantar Tugasan'),
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
+        title: Text(
+          'Hantar Tugasan',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        backgroundColor: Color(0xFF6B9B7F),
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: Colors.green))
+          ? Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFF6B9B7F),
+                strokeWidth: 2.5,
+              ),
+            )
           : _mySubmissions.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.assignment, size: 80, color: Colors.grey),
-                      SizedBox(height: 16),
+                      Icon(
+                        Icons.assignment_outlined,
+                        size: 80,
+                        color: Color(0xFF6B9B7F).withOpacity(0.3),
+                      ),
+                      SizedBox(height: 20),
                       Text(
                         'Tiada tugasan dihantar', 
-                        style: TextStyle(fontSize: 18)
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Color(0xFF2E7D32),
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      SizedBox(height: 8),
+                      SizedBox(height: 12),
+                      Text(
+                        'Mula hantar tugasan pertama anda',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      SizedBox(height: 24),
                       ElevatedButton(
                         onPressed: _uploadExercise,
-                        child: Text('HANTAR TUGASAN PERTAMA'),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                        child: Text(
+                          'HANTAR TUGASAN PERTAMA',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFF6B9B7F),
+                          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          elevation: 2,
+                        ),
                       ),
                     ],
                   ),
                 )
               : RefreshIndicator(
                   onRefresh: _loadMySubmissions,
-                  color: Colors.green,
+                  color: Color(0xFF6B9B7F),
+                  backgroundColor: Color(0xFFE8F5E9),
                   child: ListView.builder(
                     padding: EdgeInsets.symmetric(vertical: 16),
                     itemCount: _mySubmissions.length,
@@ -425,9 +586,13 @@ class _ExerciseSubmissionPageState extends State<ExerciseSubmissionPage> {
                 ),
       floatingActionButton: FloatingActionButton(
         onPressed: _uploadExercise,
-        child: Icon(Icons.add),
-        backgroundColor: Colors.green,
+        child: Icon(Icons.add, color: Colors.white, size: 28),
+        backgroundColor: Color(0xFF6B9B7F),
         tooltip: 'Hantar Tugasan Baru',
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        elevation: 4,
       ),
     );
   }
