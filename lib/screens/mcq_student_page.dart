@@ -1,7 +1,9 @@
+// lib/screens/mcq_student_page.dart
 import 'package:flutter/material.dart';
 import '../service/supabase_service.dart';
 import '../theme/color.dart';
 import 'student_exercise.dart';
+import 'student_dashboard.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class McqStudentPage extends StatefulWidget {
@@ -10,12 +12,12 @@ class McqStudentPage extends StatefulWidget {
 }
 
 class _McqStudentPageState extends State<McqStudentPage> {
-  // ✅ FIXED: Changed to late final
   late final _supabase = Supabase.instance.client;
   
   List<Map<String, dynamic>> _mcqSetList = [];
   Map<String, dynamic> _attemptsMap = {};
   bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -25,55 +27,127 @@ class _McqStudentPageState extends State<McqStudentPage> {
 
   Future<void> _loadData() async {
     try {
-      // Muat set MCQ
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      // Pastikan pengguna telah log masuk
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        setState(() {
+          _errorMessage = 'Sila log masuk untuk mengakses ujian latihan';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Muat set MCQ dengan pengesahan
       final response = await _supabase
           .from('mcq_set')
           .select('*, mcq_question(count)')
           .order('created_at', ascending: false);
 
-      // Muat percubaan pelajar
-      final user = _supabase.auth.currentUser;
-      if (user != null) {
-        final attemptsResponse = await _supabase
-            .from('student_mcq_attempts')
-            .select('*')
-            .eq('student_id', user.id);
+      // Pengesahan: Pastikan data diterima
+      if (response == null) {
+        throw Exception('Tiada data diterima dari pelayan');
+      }
 
-        // Tukar ke peta untuk carian mudah
+      // Muat percubaan pelajar
+      final attemptsResponse = await _supabase
+          .from('student_mcq_attempts')
+          .select('*')
+          .eq('student_id', user.id);
+
+      // Tukar ke peta untuk carian mudah
+      final Map<String, dynamic> tempAttemptsMap = {};
+      if (attemptsResponse != null) {
         for (var attempt in attemptsResponse) {
-          _attemptsMap[attempt['mcq_set_id']] = attempt;
+          if (attempt['mcq_set_id'] != null) {
+            tempAttemptsMap[attempt['mcq_set_id'].toString()] = attempt;
+          }
         }
       }
 
       setState(() {
-        _mcqSetList = List<Map<String, dynamic>>.from(response);
+        _mcqSetList = List<Map<String, dynamic>>.from(response ?? []);
+        _attemptsMap = tempAttemptsMap;
         _isLoading = false;
       });
+
     } catch (e) {
       print('Ralat memuat set MCQ: $e');
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Gagal memuatkan ujian. Sila cuba lagi.';
+      });
     }
   }
 
   void _startPractice(Map<String, dynamic> mcqSet) {
+    // Pengesahan: Pastikan mcqSet ada ID
+    if (mcqSet['id'] == null) {
+      _showErrorDialog('Data ujian tidak sah. Sila hubungi guru.');
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => McqPracticePage(
           mcqSet: mcqSet,
-          previousAttempt: _attemptsMap[mcqSet['id']],
+          previousAttempt: _attemptsMap[mcqSet['id'].toString()],
         ),
       ),
-    ).then((_) => _loadData()); // Segar semula apabila kembali
+    ).then((_) => _loadData());
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Ralat'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildSetCard(Map<String, dynamic> mcqSet) {
-    final questionCount = mcqSet['mcq_question'][0]['count'] ?? 0;
-    final previousAttempt = _attemptsMap[mcqSet['id']];
+    // Pengesahan data mcqSet
+    final title = mcqSet['title']?.toString() ?? 'Tiada Tajuk';
+    final description = mcqSet['description']?.toString();
+    
+    // Dapatkan bilangan soalan dengan pengesahan
+    int questionCount = 0;
+    try {
+      if (mcqSet['mcq_question'] != null && 
+          mcqSet['mcq_question'] is List && 
+          mcqSet['mcq_question'].isNotEmpty) {
+        questionCount = mcqSet['mcq_question'][0]['count'] ?? 0;
+      }
+    } catch (e) {
+      questionCount = 0;
+    }
+
+    final previousAttempt = _attemptsMap[mcqSet['id'].toString()];
     final hasAttempt = previousAttempt != null;
-    final score = hasAttempt ? (previousAttempt['score'] ?? 0) : 0;
-    final total = hasAttempt ? (previousAttempt['total_questions'] ?? questionCount) : questionCount;
-    final percentage = total > 0 ? (score / total * 100) : 0;
+    
+    // Kira markah dengan pengesahan
+    int score = 0;
+    int total = questionCount;
+    double percentage = 0;
+    
+    if (hasAttempt) {
+      score = (previousAttempt['score'] as int?) ?? 0;
+      total = (previousAttempt['total_questions'] as int?) ?? questionCount;
+      percentage = total > 0 ? (score / total * 100) : 0;
+    }
 
     return Card(
       elevation: 2,
@@ -92,13 +166,13 @@ class _McqStudentPageState extends State<McqStudentPage> {
                 padding: EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: hasAttempt
-                      ? const Color.fromARGB(255, 181, 214, 165).withOpacity(0.1)
-                      : const Color.fromARGB(255, 178, 206, 165).withOpacity(0.1),
+                      ? Color.fromARGB(255, 181, 214, 165).withOpacity(0.1)
+                      : Color.fromARGB(255, 178, 206, 165).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   hasAttempt ? Icons.assignment_turned_in : Icons.quiz,
-                  color: hasAttempt ? const Color.fromARGB(255, 176, 199, 166) : StudentColors.primaryGreen,
+                  color: hasAttempt ? Color.fromARGB(255, 176, 199, 166) : StudentColors.primaryGreen,
                   size: 32,
                 ),
               ),
@@ -111,12 +185,14 @@ class _McqStudentPageState extends State<McqStudentPage> {
                       children: [
                         Expanded(
                           child: Text(
-                            mcqSet['title'],
+                            title,
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                               color: StudentColors.textDark,
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (hasAttempt)
@@ -138,10 +214,10 @@ class _McqStudentPageState extends State<McqStudentPage> {
                           ),
                       ],
                     ),
-                    if (mcqSet['description'] != null) ...[
+                    if (description != null && description.isNotEmpty) ...[
                       SizedBox(height: 4),
                       Text(
-                        mcqSet['description'],
+                        description,
                         style: TextStyle(
                           fontSize: 14,
                           color: StudentColors.textLight,
@@ -226,43 +302,76 @@ class _McqStudentPageState extends State<McqStudentPage> {
         title: Text('Ujian Latihan'),
         backgroundColor: StudentColors.topBar,
         foregroundColor: StudentColors.textDark,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: _isLoading ? null : _loadData,
+            tooltip: 'Segar semula',
+          ),
+        ],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: StudentColors.primaryGreen))
-          : _mcqSetList.isEmpty
+          : _errorMessage != null
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.quiz, size: 80, color: Colors.grey),
+                      Icon(Icons.error_outline, size: 80, color: Colors.red),
                       SizedBox(height: 16),
                       Text(
-                        'Tiada ujian latihan',
-                        style: TextStyle(fontSize: 18),
+                        _errorMessage!,
+                        style: TextStyle(fontSize: 18, color: Colors.red),
+                        textAlign: TextAlign.center,
                       ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Guru anda akan tambah ujian latihan di sini',
-                        style: TextStyle(color: Colors.grey),
+                      SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: _loadData,
+                        child: Text('Cuba Lagi'),
                       ),
                     ],
                   ),
                 )
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  color: StudentColors.primaryGreen,
-                  child: ListView.builder(
-                    padding: EdgeInsets.all(16),
-                    itemCount: _mcqSetList.length,
-                    itemBuilder: (context, index) {
-                      final mcqSet = _mcqSetList[index];
-                      return Padding(
-                        padding: EdgeInsets.only(bottom: 12),
-                        child: _buildSetCard(mcqSet),
-                      );
-                    },
-                  ),
-                ),
+              : _mcqSetList.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.quiz, size: 80, color: Colors.grey),
+                          SizedBox(height: 16),
+                          Text(
+                            'Tiada ujian latihan',
+                            style: TextStyle(fontSize: 18),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Guru anda akan tambah ujian latihan di sini',
+                            style: TextStyle(color: Colors.grey),
+                            textAlign: TextAlign.center,
+                          ),
+                          SizedBox(height: 20),
+                          ElevatedButton(
+                            onPressed: _loadData,
+                            child: Text('Segar Semula'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _loadData,
+                      color: StudentColors.primaryGreen,
+                      child: ListView.builder(
+                        padding: EdgeInsets.all(16),
+                        itemCount: _mcqSetList.length,
+                        itemBuilder: (context, index) {
+                          final mcqSet = _mcqSetList[index];
+                          return Padding(
+                            padding: EdgeInsets.only(bottom: 12),
+                            child: _buildSetCard(mcqSet),
+                          );
+                        },
+                      ),
+                    ),
     );
   }
 }
@@ -281,7 +390,6 @@ class McqPracticePage extends StatefulWidget {
 }
 
 class _McqPracticePageState extends State<McqPracticePage> {
-  // ✅ FIXED: Changed to late final
   late final _supabase = Supabase.instance.client;
   
   List<Map<String, dynamic>> _questions = [];
@@ -290,6 +398,7 @@ class _McqPracticePageState extends State<McqPracticePage> {
   bool _isLoading = true;
   bool _showResults = false;
   Map<String, dynamic>? _result;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -297,9 +406,17 @@ class _McqPracticePageState extends State<McqPracticePage> {
     _loadQuestions();
   }
 
+  void _goBackToDashboard() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StudentDashboard(),
+      ),
+      (route) => false,
+    );
+  }
+
   void _goBackToMcqPage() {
-    print('🚀 Kembali ke halaman utama...');
-    
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
@@ -309,49 +426,171 @@ class _McqPracticePageState extends State<McqPracticePage> {
     );
   }
 
+  void _showBackOptions() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(16),
+          topRight: Radius.circular(16),
+        ),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(height: 16),
+            Text(
+              'Pilih destinasi',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 16),
+            
+            ListTile(
+              leading: Icon(Icons.dashboard, color: Colors.deepPurple),
+              title: Text('Papan Pemuka'),
+              subtitle: Text('Halaman utama dengan statistik'),
+              onTap: () {
+                Navigator.pop(context);
+                _goBackToDashboard();
+              },
+            ),
+            Divider(),
+            
+            ListTile(
+              leading: Icon(Icons.quiz, color: StudentColors.primaryGreen),
+              title: Text('Halaman Latihan'),
+              subtitle: Text('Senarai semua ujian latihan'),
+              onTap: () {
+                Navigator.pop(context);
+                _goBackToMcqPage();
+              },
+            ),
+            Divider(),
+            
+            ListTile(
+              leading: Icon(Icons.apps, color: Colors.blue),
+              title: Text('Dashboard Modul'),
+              subtitle: Text('Halaman dengan 3 tab (Bahan, Latihan, Hantar Tugas)'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => StudentExercisePage(initialTabIndex: 0),
+                  ),
+                  (route) => false,
+                );
+              },
+            ),
+            Divider(),
+            
+            ListTile(
+              leading: Icon(Icons.cancel, color: Colors.grey),
+              title: Text('Batal'),
+              onTap: () => Navigator.pop(context),
+            ),
+            SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadQuestions() async {
     try {
-      print('📥 Memuat soalan untuk Set MCQ: ${widget.mcqSet['id']}');
-      
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      // Pengesahan: Pastikan mcqSet ada ID
+      if (widget.mcqSet['id'] == null) {
+        throw Exception('ID ujian tidak sah');
+      }
+
       final response = await _supabase
           .from('mcq_question')
           .select('*')
           .eq('mcq_set_id', widget.mcqSet['id'])
           .order('created_at', ascending: true);
 
-      print('✅ Soalan dimuat: ${response.length}');
-      
-      setState(() {
-        _questions = List<Map<String, dynamic>>.from(response);
-        
-        if (widget.previousAttempt != null) {
-          print('🔄 Memuat percubaan sebelumnya');
-          final answers = widget.previousAttempt!['answers'] ?? {};
-          for (int i = 0; i < _questions.length; i++) {
-            final questionId = _questions[i]['id'].toString();
+      // Pengesahan: Pastikan data diterima
+      if (response == null) {
+        throw Exception('Tiada data soalan diterima');
+      }
+
+      List<Map<String, dynamic>> questions = [];
+      if (response is List) {
+        questions = List<Map<String, dynamic>>.from(response);
+      }
+
+      // Pengesahan: Pastikan soalan ada data yang diperlukan
+      for (var question in questions) {
+        if (question['question_text'] == null || question['question_text'].toString().isEmpty) {
+          print('Amaran: Soalan tanpa teks ditemui');
+        }
+      }
+
+      Map<int, String> loadedAnswers = {};
+      if (widget.previousAttempt != null) {
+        final answers = widget.previousAttempt!['answers'] ?? {};
+        if (answers is Map) {
+          for (int i = 0; i < questions.length; i++) {
+            final questionId = questions[i]['id'].toString();
             if (answers.containsKey(questionId)) {
-              _selectedAnswers[i] = answers[questionId];
+              final answer = answers[questionId];
+              if (answer is String && answer.isNotEmpty) {
+                loadedAnswers[i] = answer;
+              }
             }
           }
-          print('📝 Jawapan sebelumnya dimuat: $_selectedAnswers');
         }
-        
+      }
+
+      setState(() {
+        _questions = questions;
+        _selectedAnswers = loadedAnswers;
         _isLoading = false;
       });
+
     } catch (e) {
-      print('❌ Ralat memuat soalan: $e');
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ralat memuat soalan: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      print('Ralat memuat soalan: $e');
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Gagal memuatkan soalan. Sila cuba lagi.';
+      });
+      
+      // Tunjukkan mesej ralat kepada pengguna
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ralat: $e'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      });
     }
   }
 
   void _selectAnswer(String answer) {
-    print('🎯 Dipilih Soalan${_currentIndex + 1}: $answer');
+    // Pengesahan: Pastikan jawapan sah
+    if (!['a', 'b', 'c', 'd'].contains(answer.toLowerCase())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Jawapan tidak sah'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _selectedAnswers[_currentIndex] = answer;
     });
@@ -361,7 +600,6 @@ class _McqPracticePageState extends State<McqPracticePage> {
     if (_currentIndex < _questions.length - 1) {
       setState(() {
         _currentIndex++;
-        print('➡️ Beralih ke Soalan${_currentIndex + 1}');
       });
     }
   }
@@ -370,27 +608,92 @@ class _McqPracticePageState extends State<McqPracticePage> {
     if (_currentIndex > 0) {
       setState(() {
         _currentIndex--;
-        print('⬅️ Beralih ke Soalan${_currentIndex + 1}');
       });
     }
   }
 
+  bool _validateCurrentAnswer() {
+    final selected = _selectedAnswers[_currentIndex];
+    if (selected == null || selected.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sila pilih jawapan untuk soalan ini'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  bool _validateAllAnswers() {
+    List<int> unanswered = [];
+    
+    for (int i = 0; i < _questions.length; i++) {
+      final selected = _selectedAnswers[i];
+      if (selected == null || selected.isEmpty) {
+        unanswered.add(i + 1);
+      }
+    }
+    
+    if (unanswered.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sila jawab semua soalan: ${unanswered.join(", ")}'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _submitTest() async {
+    // Pengesahan: Pastikan ada soalan
+    if (_questions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tiada soalan dalam ujian ini'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Pengesahan: Pastikan semua soalan dijawab
+    if (!_validateAllAnswers()) {
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: StudentColors.primaryGreen),
+            SizedBox(height: 16),
+            Text('Menghantar jawapan...'),
+          ],
+        ),
+      ),
+    );
+
     try {
-      print('🚀 Menyerahkan sebagai pelajar tetamu...');
-      
       String guestStudentId = 'guest_${DateTime.now().millisecondsSinceEpoch}';
-      String guestName = 'Pelajar';
-      
-      print('👤 ID Tetamu: $guestStudentId');
+      String guestName = 'Pelajar Tetamu';
       
       int correctAnswers = 0;
       Map<String, dynamic> answers = {};
       
+      // Kira markah dengan pengesahan
       for (int i = 0; i < _questions.length; i++) {
         final question = _questions[i];
         final selected = _selectedAnswers[i] ?? '';
-        final correct = question['correct_answer'];
+        final correct = question['correct_answer']?.toString() ?? '';
         
         answers[question['id'].toString()] = selected;
         
@@ -402,8 +705,6 @@ class _McqPracticePageState extends State<McqPracticePage> {
       double percentage = _questions.length > 0 
           ? (correctAnswers / _questions.length * 100) 
           : 0;
-      
-      print('🎯 MARKAH: $correctAnswers/${_questions.length} (${percentage.toStringAsFixed(1)}%)');
       
       final now = DateTime.now().toIso8601String();
       final attemptData = {
@@ -420,16 +721,17 @@ class _McqPracticePageState extends State<McqPracticePage> {
         'student_name': guestName,
       };
       
-      print('💾 Menyimpan dengan ID tetamu...');
-      
       try {
         await _supabase
             .from('student_mcq_attempts')
             .insert(attemptData);
-        print('✅ Disimpan ke pangkalan data sebagai tetamu');
+        print('Jawapan berjaya disimpan');
       } catch (dbError) {
-        print('⚠️ Simpanan pangkalan data gagal (tetapi teruskan): $dbError');
+        print('Ralat menyimpan ke pangkalan data: $dbError');
+        // Teruskan walaupun gagal simpan
       }
+      
+      Navigator.pop(context); // Tutup dialog loading
       
       setState(() {
         _showResults = true;
@@ -440,10 +742,17 @@ class _McqPracticePageState extends State<McqPracticePage> {
         };
       });
       
-      print('🎊 Keputusan ditunjukkan!');
-      
     } catch (e) {
-      print('💥 Ralat dalam penyerahan: $e');
+      Navigator.pop(context); // Tutup dialog loading
+      print('Ralat dalam penyerahan: $e');
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menghantar ujian: $e'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
       
       setState(() {
         _showResults = true;
@@ -451,16 +760,24 @@ class _McqPracticePageState extends State<McqPracticePage> {
           'score': 0,
           'total': _questions.length,
           'percentage': 0,
+          'error': 'Gagal menghantar',
         };
       });
     }
   }
 
   Widget _buildQuestionCard() {
-    if (_questions.isEmpty) return SizedBox();
+    if (_questions.isEmpty) {
+      return Center(
+        child: Text('Tiada soalan tersedia'),
+      );
+    }
     
     final question = _questions[_currentIndex];
     final selectedAnswer = _selectedAnswers[_currentIndex] ?? '';
+    
+    // Dapatkan teks soalan dengan pengesahan
+    final questionText = question['question_text']?.toString() ?? '[Tiada teks soalan]';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -503,7 +820,7 @@ class _McqPracticePageState extends State<McqPracticePage> {
           child: Padding(
             padding: EdgeInsets.all(20),
             child: Text(
-              question['question_text'] ?? '[Tiada teks soalan]',
+              questionText,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
@@ -523,7 +840,7 @@ class _McqPracticePageState extends State<McqPracticePage> {
         ),
         SizedBox(height: 12),
         ...['a', 'b', 'c', 'd'].map((option) {
-          final optionText = question['option_$option'] ?? '[Tiada pilihan]';
+          final optionText = question['option_$option']?.toString() ?? '[Tiada pilihan]';
           final isSelected = selectedAnswer == option;
           
           return GestureDetector(
@@ -556,7 +873,11 @@ class _McqPracticePageState extends State<McqPracticePage> {
                     ),
                   ),
                 ),
-                title: Text(optionText),
+                title: Text(
+                  optionText,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 trailing: isSelected
                     ? Icon(Icons.check_circle, color: StudentColors.success)
                     : null,
@@ -569,10 +890,22 @@ class _McqPracticePageState extends State<McqPracticePage> {
   }
 
   Widget _buildResults() {
-    if (_result == null) return Center(child: Text('Tiada keputusan'));
-    final percentage = _result!['percentage'];
-    final score = _result!['score'];
-    final total = _result!['total'];
+    if (_result == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error, size: 64, color: Colors.red),
+            SizedBox(height: 16),
+            Text('Tiada keputusan tersedia'),
+          ],
+        ),
+      );
+    }
+    
+    final percentage = _result!['percentage'] ?? 0;
+    final score = _result!['score'] ?? 0;
+    final total = _result!['total'] ?? 0;
 
     return Scaffold(
       backgroundColor: StudentColors.background,
@@ -582,7 +915,7 @@ class _McqPracticePageState extends State<McqPracticePage> {
         foregroundColor: StudentColors.textDark,
         leading: IconButton(
           icon: Icon(Icons.arrow_back),
-          onPressed: _goBackToMcqPage,
+          onPressed: _showBackOptions,
         ),
       ),
       body: SingleChildScrollView(
@@ -651,7 +984,7 @@ class _McqPracticePageState extends State<McqPracticePage> {
                     padding: EdgeInsets.all(20),
                     child: Column(
                       children: [
-                        _buildResultRow('Ujian:', widget.mcqSet['title']),
+                        _buildResultRow('Ujian:', widget.mcqSet['title']?.toString() ?? 'Tiada Tajuk'),
                         Divider(),
                         _buildResultRow('Markah Anda:', '$score daripada $total'),
                         Divider(),
@@ -660,12 +993,12 @@ class _McqPracticePageState extends State<McqPracticePage> {
                         _buildResultRow(
                           'Status:',
                           percentage >= 80
-                              ? 'Cemerlang!'
+                              ? 'Cemerlang! 🎉'
                               : percentage >= 60
-                                  ? 'Baik!'
+                                  ? 'Baik! 👍'
                                   : percentage >= 40
-                                      ? 'Memuaskan'
-                                      : 'Perlu usaha lagi',
+                                      ? 'Memuaskan 😊'
+                                      : 'Perlu usaha lagi 💪',
                         ),
                       ],
                     ),
@@ -677,19 +1010,35 @@ class _McqPracticePageState extends State<McqPracticePage> {
                   padding: EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     children: [
+                      // Button to view answers and explanations
                       Container(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _goBackToMcqPage,
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => McqReviewPage(
+                                  mcqSet: widget.mcqSet,
+                                  attempt: _result != null ? {
+                                    'score': _result!['score'],
+                                    'total_questions': _result!['total'],
+                                  } : {},
+                                  questions: _questions,
+                                  selectedAnswers: _selectedAnswers,
+                                ),
+                              ),
+                            );
+                          },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: StudentColors.success,
+                            backgroundColor: Colors.blue,
                             padding: EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
                           child: Text(
-                            'KEMBALI KE HALAMAN LATIHAN',
+                            'LIHAT JAWAPAN DAN NOTA GURU',
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -698,33 +1047,57 @@ class _McqPracticePageState extends State<McqPracticePage> {
                           ),
                         ),
                       ),
-                      SizedBox(height: 16),
-                      Container(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            print('🔄 Butang Ulang Ujian ditekan');
-                            setState(() {
-                              _showResults = false;
-                              _selectedAnswers.clear();
-                              _currentIndex = 0;
-                            });
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            padding: EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(color: StudentColors.success, width: 2),
-                            ),
+                      SizedBox(height: 12),
+                      
+                      ElevatedButton(
+                        onPressed: _showBackOptions,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: StudentColors.success,
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Text(
-                            'ULANG UJIAN INI',
-                            style: TextStyle(
-                              color: StudentColors.success,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.arrow_back, color: Colors.white),
+                            SizedBox(width: 8),
+                            Text(
+                              'KEMBALI',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _showResults = false;
+                            _selectedAnswers.clear();
+                            _currentIndex = 0;
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: StudentColors.success, width: 2),
+                          ),
+                        ),
+                        child: Text(
+                          'ULANG UJIAN INI',
+                          style: TextStyle(
+                            color: StudentColors.success,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
                           ),
                         ),
                       ),
@@ -770,7 +1143,7 @@ class _McqPracticePageState extends State<McqPracticePage> {
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(widget.mcqSet['title']),
+          title: Text(widget.mcqSet['title']?.toString() ?? 'Ujian Latihan'),
           backgroundColor: StudentColors.topBar,
           foregroundColor: StudentColors.textDark,
         ),
@@ -781,6 +1154,19 @@ class _McqPracticePageState extends State<McqPracticePage> {
               CircularProgressIndicator(color: StudentColors.primaryGreen),
               SizedBox(height: 16),
               Text('Memuatkan soalan...'),
+              if (_errorMessage != null) ...[
+                SizedBox(height: 16),
+                Text(
+                  _errorMessage!,
+                  style: TextStyle(color: Colors.red),
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _loadQuestions,
+                  child: Text('Cuba Lagi'),
+                ),
+              ],
             ],
           ),
         ),
@@ -794,9 +1180,13 @@ class _McqPracticePageState extends State<McqPracticePage> {
     if (_questions.isEmpty) {
       return Scaffold(
         appBar: AppBar(
-          title: Text(widget.mcqSet['title']),
+          title: Text(widget.mcqSet['title']?.toString() ?? 'Ujian Latihan'),
           backgroundColor: StudentColors.topBar,
           foregroundColor: StudentColors.textDark,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context),
+          ),
         ),
         body: Center(
           child: Column(
@@ -804,9 +1194,20 @@ class _McqPracticePageState extends State<McqPracticePage> {
             children: [
               Icon(Icons.quiz, size: 64, color: Colors.grey),
               SizedBox(height: 16),
-              Text('Tiada soalan dalam ujian ini'),
+              Text(
+                'Tiada soalan dalam ujian ini',
+                style: TextStyle(fontSize: 18),
+              ),
               SizedBox(height: 8),
-              Text('Sila hubungi guru anda'),
+              Text(
+                'Sila hubungi guru anda',
+                style: TextStyle(color: Colors.grey),
+              ),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Kembali'),
+              ),
             ],
           ),
         ),
@@ -816,7 +1217,7 @@ class _McqPracticePageState extends State<McqPracticePage> {
     return Scaffold(
       backgroundColor: StudentColors.background,
       appBar: AppBar(
-        title: Text(widget.mcqSet['title']),
+        title: Text(widget.mcqSet['title']?.toString() ?? 'Ujian Latihan'),
         backgroundColor: StudentColors.topBar,
         foregroundColor: StudentColors.textDark,
       ),
@@ -854,65 +1255,42 @@ class _McqPracticePageState extends State<McqPracticePage> {
             ),
             ElevatedButton(
               onPressed: () async {
-                final currentAnswered = _selectedAnswers.containsKey(_currentIndex) && 
-                                      _selectedAnswers[_currentIndex] != null && 
-                                      _selectedAnswers[_currentIndex]!.isNotEmpty;
-                
-                if (!currentAnswered) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Sila pilih jawapan untuk soalan ini'),
-                      backgroundColor: Colors.orange,
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                // Pengesahan: Pastikan soalan semasa dijawab
+                if (!_validateCurrentAnswer()) {
                   return;
                 }
                 
                 if (_currentIndex == _questions.length - 1) {
-                  bool allAnswered = true;
-                  List<int> unanswered = [];
-                  
-                  for (int i = 0; i < _questions.length; i++) {
-                    if (!_selectedAnswers.containsKey(i) || 
-                        _selectedAnswers[i] == null || 
-                        _selectedAnswers[i]!.isEmpty) {
-                      allAnswered = false;
-                      unanswered.add(i + 1);
-                    }
-                  }
-                  
-                  if (!allAnswered) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Sila jawab semua soalan: ${unanswered.join(", ")}'),
-                        backgroundColor: Colors.orange,
-                        duration: Duration(seconds: 3),
-                      ),
-                    );
+                  // Pengesahan: Pastikan semua soalan dijawab
+                  if (!_validateAllAnswers()) {
                     return;
                   }
                   
-                  showDialog(
+                  // Tanya pengesahan sebelum hantar
+                  bool confirm = await showDialog(
                     context: context,
-                    barrierDismissible: false,
-                    builder: (context) => Center(
-                      child: CircularProgressIndicator(color: StudentColors.primaryGreen),
+                    builder: (context) => AlertDialog(
+                      title: Text('Hantar Ujian'),
+                      content: Text('Adakah anda pasti ingin menghantar ujian ini? Anda tidak boleh mengubah jawapan selepas penghantaran.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: Text('Batal'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: StudentColors.success,
+                          ),
+                          child: Text('Ya, Hantar'),
+                        ),
+                      ],
                     ),
-                  );
+                  ) ?? false;
                   
-                  try {
-                    await _submitTest();
-                    Navigator.pop(context);
-                  } catch (e) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Ralat: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
+                  if (!confirm) return;
+                  
+                  await _submitTest();
                 } else {
                   _nextQuestion();
                 }
@@ -938,6 +1316,423 @@ class _McqPracticePageState extends State<McqPracticePage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class McqReviewPage extends StatefulWidget {
+  final Map<String, dynamic> mcqSet;
+  final Map<String, dynamic> attempt;
+  final List<Map<String, dynamic>> questions;
+  final Map<int, String> selectedAnswers;
+
+  const McqReviewPage({
+    required this.mcqSet,
+    required this.attempt,
+    required this.questions,
+    required this.selectedAnswers,
+  });
+
+  @override
+  _McqReviewPageState createState() => _McqReviewPageState();
+}
+
+class _McqReviewPageState extends State<McqReviewPage> {
+  void _goBackToDashboard() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StudentDashboard(),
+      ),
+      (route) => false,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final score = widget.attempt['score'] ?? 0;
+    final total = widget.attempt['total_questions'] ?? widget.questions.length;
+    final percentage = total > 0 ? (score / total * 100) : 0;
+
+    // Pengesahan: Pastikan ada soalan
+    if (widget.questions.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text('Ulasan Ujian'),
+          backgroundColor: StudentColors.topBar,
+          foregroundColor: StudentColors.textDark,
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error, size: 64, color: Colors.orange),
+              SizedBox(height: 16),
+              Text('Tiada soalan untuk diulas'),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Kembali'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: StudentColors.background,
+      appBar: AppBar(
+        title: Text('Ulasan Ujian'),
+        backgroundColor: StudentColors.topBar,
+        foregroundColor: StudentColors.textDark,
+      ),
+      body: Column(
+        children: [
+          // Summary Card
+          Container(
+            margin: EdgeInsets.all(16),
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: StudentColors.card,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Text(
+                  widget.mcqSet['title']?.toString() ?? 'Ujian Tanpa Tajuk',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: StudentColors.textDark,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildStatCard('$score/$total', 'Jawapan Betul'),
+                    _buildStatCard('${percentage.toStringAsFixed(1)}%', 'Peratusan'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: EdgeInsets.all(16),
+              itemCount: widget.questions.length,
+              itemBuilder: (context, index) {
+                return _buildQuestionReview(index);
+              },
+            ),
+          ),
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Colors.grey[200]!)),
+            ),
+            child: Column(
+              children: [
+                ElevatedButton(
+                  onPressed: _goBackToDashboard,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    minimumSize: Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'KEMBALI KE PAPAN PEMUKA',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => StudentExercisePage(initialTabIndex: 1),
+                      ),
+                      (route) => false,
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: StudentColors.primaryGreen,
+                    minimumSize: Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'KEMBALI KE HALAMAN LATIHAN',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(String value, String label) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: StudentColors.primaryGreen,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: StudentColors.textLight,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuestionReview(int index) {
+    final question = widget.questions[index];
+    final questionNumber = index + 1;
+    final selectedAnswer = widget.selectedAnswers[index] ?? '';
+    final correctAnswer = question['correct_answer']?.toString() ?? '';
+    final explanation = question['explanation']?.toString() ?? 'Tiada nota dari guru';
+    final isCorrect = selectedAnswer == correctAnswer;
+
+    // Dapatkan teks soalan dengan pengesahan
+    final questionText = question['question_text']?.toString() ?? '[Tiada teks soalan]';
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isCorrect ? StudentColors.success : Colors.red,
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Question Header
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isCorrect ? StudentColors.success.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(10),
+                topRight: Radius.circular(10),
+              ),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: isCorrect ? StudentColors.success : Colors.red,
+                  radius: 14,
+                  child: Text(
+                    '$questionNumber',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Soalan $questionNumber',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: StudentColors.textDark,
+                    ),
+                  ),
+                ),
+                Icon(
+                  isCorrect ? Icons.check_circle : Icons.cancel,
+                  color: isCorrect ? StudentColors.success : Colors.red,
+                  size: 24,
+                ),
+              ],
+            ),
+          ),
+          
+          // Question Text
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              questionText,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: StudentColors.textDark,
+              ),
+            ),
+          ),
+          
+          Divider(height: 1),
+          
+          // Answers Section
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Jawapan Anda:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: StudentColors.textLight,
+                  ),
+                ),
+                SizedBox(height: 8),
+                _buildAnswerDisplay(
+                  selectedAnswer.isNotEmpty ? selectedAnswer : '-',
+                  _getOptionText(question, selectedAnswer),
+                  isCorrect ? StudentColors.success : Colors.red,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Jawapan Betul:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: StudentColors.textLight,
+                  ),
+                ),
+                SizedBox(height: 8),
+                _buildAnswerDisplay(
+                  correctAnswer.isNotEmpty ? correctAnswer : '-',
+                  _getOptionText(question, correctAnswer),
+                  StudentColors.success,
+                ),
+              ],
+            ),
+          ),
+          
+          Divider(height: 1),
+          
+          // Explanation Section
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.05),
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(10),
+                bottomRight: Radius.circular(10),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.lightbulb_outline, color: Colors.blue, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Nota Guru:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Text(
+                  explanation,
+                  style: TextStyle(
+                    color: StudentColors.textDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getOptionText(Map<String, dynamic> question, String option) {
+    if (option.isEmpty || option == '-') return 'Tiada jawapan';
+    
+    // Dapatkan teks pilihan dengan pengesahan
+    final optionText = question['option_$option']?.toString();
+    
+    if (optionText == null || optionText.isEmpty) {
+      return 'Pilihan $option: [Tiada teks]';
+    }
+    
+    return optionText;
+  }
+
+  Widget _buildAnswerDisplay(String option, String text, Color color) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3), width: 1),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: color,
+            radius: 12,
+            child: Text(
+              option.toUpperCase(),
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: StudentColors.textDark,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
