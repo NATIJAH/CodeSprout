@@ -248,7 +248,6 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // FIX 2: Removed Unicode character
                     const Text(
                       'Butiran Bahan', 
                       style: TextStyle(
