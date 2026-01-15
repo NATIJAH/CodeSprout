@@ -84,7 +84,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
     final provider = Provider.of<MaterialsProvider>(context, listen: false);
     
     if (widget.isEditing) {
-      // Update material
+      // Update material details
       final success = await provider.updateMaterial(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
