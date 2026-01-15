@@ -9,6 +9,9 @@ const Color _primaryAccent = Color(0xff6b8e7c); // Soft Green/Gray
 const Color _backgroundColor = Color(0xfff9f9f9); // Light background
 const Color _cardHighlight = Color(0xffe8f0e8); // Very light green for subtle contrast
 
+const List<String> _allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'mp4', 'avi', 'mov', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'];
+const int _maxFileSizeMB = 50;
+
 class UploadMaterialScreen extends StatefulWidget {
   final bool isEditing;
   
@@ -29,6 +32,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
   
   List<String> _tags = [];
   String _selectedClassName = '5 Amanah';
+  bool _isPickingFile = false;
 
   // Malaysian Class Names
   final List<String> _classNames = [
@@ -74,8 +78,39 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
   }
 
   Future<void> _pickFile() async {
+    setState(() => _isPickingFile = true);
+
     final provider = Provider.of<MaterialsProvider>(context, listen: false);
     await provider.pickFile();
+
+    final file = provider.selectedFile;
+    if (file != null) {
+      final extension = file.extension?.toLowerCase();
+      if (extension == null || !_allowedExtensions.contains(extension)) {
+        provider.clearSelectedFile();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Jenis fail tidak disokong'), backgroundColor: Colors.red),
+          );
+        }
+        setState(() => _isPickingFile = false);
+        return;
+      }
+
+      final sizeMB = file.size != null ? file.size! / (1024 * 1024) : 0;
+      if (sizeMB > _maxFileSizeMB) {
+        provider.clearSelectedFile();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Saiz fail melebihi ${_maxFileSizeMB}MB'), backgroundColor: Colors.red),
+          );
+        }
+        setState(() => _isPickingFile = false);
+        return;
+      }
+    }
+
+    setState(() => _isPickingFile = false);
   }
 
   Future<void> _submitForm() async {
@@ -134,10 +169,11 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
   }
 
   void _addTag() {
-    final tag = _tagsController.text.trim();
-    if (tag.isNotEmpty && !_tags.contains(tag)) {
+    final input = _tagsController.text.trim();
+    if (input.isNotEmpty) {
+      final newTags = input.split(',').map((tag) => tag.trim()).where((tag) => tag.isNotEmpty && !_tags.contains(tag));
       setState(() {
-        _tags.add(tag);
+        _tags.addAll(newTags);
         _tagsController.clear();
       });
     }
@@ -342,7 +378,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                     const SizedBox(height: 15),
                     
                     DropdownButtonFormField<String>(
-                      value: _selectedClassName,
+                      initialValue: _selectedClassName,
                       decoration: InputDecoration(
                         labelText: 'Nama Kelas *',
                         labelStyle: TextStyle(color: _subTextColor),
@@ -420,7 +456,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                           child: TextFormField(
                             controller: _tagsController,
                             decoration: InputDecoration(
-                              hintText: 'Cth., kerja rumah, peperiksaan, nota, bab-1',
+                              hintText: 'Cth., kerja rumah, peperiksaan (pisahkan dengan koma)',
                               hintStyle: TextStyle(color: _subTextColor.withOpacity(0.6)),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -536,7 +572,8 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
   }
 
   Widget _buildFileInfo(PlatformFile file) {
-    final sizeInMB = (file.size / (1024 * 1024)).toStringAsFixed(2);
+    final sizeInMB = file.size != null ? (file.size! / (1024 * 1024)).toStringAsFixed(2) : 'Tidak diketahui';
+    final extension = file.extension?.toUpperCase() ?? 'TIDAK DIKETAHUI';
     
     return Container(
       padding: const EdgeInsets.all(16),
@@ -569,7 +606,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${file.extension?.toUpperCase() ?? 'FAIL'} • ${sizeInMB} MB',
+                  '$extension • $sizeInMB MB',
                   style: TextStyle(
                     color: _subTextColor,
                   ),
@@ -583,6 +620,18 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
   }
 
   Widget _buildFilePicker() {
+    if (_isPickingFile) {
+      return Container(
+        height: 140,
+        decoration: BoxDecoration(
+          color: _primaryColor.withOpacity(0.05),
+          border: Border.all(color: _primaryColor, width: 2),
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return GestureDetector(
       onTap: _pickFile,
       child: Container(
