@@ -572,4 +572,5 @@ class _ChatItem {
     this.group,
     this.lastMessageTime,
   });
+
 }
