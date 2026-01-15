@@ -102,7 +102,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
         Navigator.pop(context);
       }
     } else {
-      // Upload new material
+      // Upload new material 
       final selectedFile = provider.selectedFile;
       if (selectedFile == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -199,7 +199,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                   ),
                   child: Column(
                     children: [
-                      // FIX 1: Removed Unicode character
+                      
                       const Text(
                         'Pilih Fail', 
                         style: TextStyle(
